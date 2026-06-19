@@ -2,7 +2,7 @@
 
 Perditio is an AI-native culture platform building systems that turn cultural moments into scalable, personalized experiences.
 
-## What We’re Building
+## What We're Building
 
 We design infrastructure for discovering, creating, and participating in culture through AI.
 
@@ -35,3 +35,4 @@ Core infrastructure, workflows, and business logic remain private.
 ## Status
 
 Actively building.
+
