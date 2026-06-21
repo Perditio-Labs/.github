@@ -4,6 +4,7 @@ name: metadata-guard
 # it ANNOTATES + comments missing metadata (core.warning) instead of failing the run, so it
 # does not emit GitHub failure-notification emails. Pure github-script. If the runner is
 # offline the check simply queues until it is back (no billing, no email).
+# dependabot[bot] is exempt (its PRs carry none of the required metadata) - W1.11.
 on:
   issues:
     types: [opened, edited, reopened]
@@ -15,6 +16,7 @@ permissions:
   contents: read
 jobs:
   guard:
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: [self-hosted, windows, perditio-os]
     steps:
       - uses: actions/github-script@v7
