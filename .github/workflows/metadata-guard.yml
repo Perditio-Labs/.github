@@ -1,0 +1,59 @@
+name: metadata-guard
+# Self-hosted (label: self-hosted/windows/perditio-os) so it never consumes GitHub-hosted
+# minutes (zero-dollar) and never fails at allocation when billing is constrained. NON-FATAL:
+# it ANNOTATES + comments missing metadata (core.warning) instead of failing the run, so it
+# does not emit GitHub failure-notification emails. Pure github-script. If the runner is
+# offline the check simply queues until it is back (no billing, no email).
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request:
+    types: [opened, edited, reopened, ready_for_review]
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+jobs:
+  guard:
+    runs-on: [self-hosted, windows, perditio-os]
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const isPR = !!context.payload.pull_request;
+            const obj = isPR ? context.payload.pull_request : context.payload.issue;
+            const labels = (obj.labels || []).map(l => l.name);
+            const body = obj.body || '';
+            const missing = [];
+            if (!obj.assignees || obj.assignees.length === 0) missing.push('assignee');
+            if (!labels.some(l => /^P[0-3]$/.test(l))) missing.push('priority label (P0-P3)');
+            if (!labels.some(l => l.startsWith('area:') || l.startsWith('type:'))) missing.push('area:/type: label');
+            if (!obj.milestone) missing.push('milestone');
+            if (!/Estimate[^\n]*\d/i.test(body)) missing.push('Estimate (hrs)');
+            if (isPR) {
+              if (!/Actual[^\n]*\d/i.test(body)) missing.push('Actual (hrs)');
+              if (!/(closes|fixes|resolves)\s+#\d+/i.test(body)) missing.push('linked issue (Closes #N)');
+              const revs = (context.payload.pull_request.requested_reviewers || []).length + (context.payload.pull_request.requested_teams || []).length;
+              if (revs === 0) missing.push('reviewer');
+            }
+            const n = obj.number;
+            const MARK = '<!-- metadata-guard -->';
+            // find an existing guard comment to update (dedup, no comment spam)
+            let prior = null;
+            try {
+              const cs = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: n, per_page: 100 });
+              prior = cs.find(c => (c.body || '').includes(MARK));
+            } catch (e) {}
+            if (missing.length) {
+              const msg = MARK + '\nmetadata-guard: missing required field(s) -> ' + missing.join(', ') +
+                '. See governance/metrics-and-metadata-standard.md. Every ' + (isPR ? 'PR' : 'issue') +
+                ' needs assignee + priority + area/type label + milestone + Estimate' +
+                (isPR ? ' + Actual + linked issue + reviewer' : '') + '.';
+              if (prior) { await github.rest.issues.updateComment({ ...context.repo, comment_id: prior.id, body: msg }); }
+              else { await github.rest.issues.createComment({ ...context.repo, issue_number: n, body: msg }); }
+              if (!isPR) { try { await github.rest.issues.addLabels({ ...context.repo, issue_number: n, labels: ['needs-metadata'] }); } catch (e) {} }
+              core.warning(msg);  // NON-FATAL: annotate, do not fail the run (no failure email)
+            } else {
+              if (prior) { try { await github.rest.issues.updateComment({ ...context.repo, comment_id: prior.id, body: MARK + '\nmetadata-guard: all required metadata present.' }); } catch (e) {} }
+              if (!isPR) { try { await github.rest.issues.removeLabel({ ...context.repo, issue_number: n, name: 'needs-metadata' }); } catch (e) {} }
+            }
