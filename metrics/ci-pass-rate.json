@@ -1,0 +1,282 @@
+[
+  {
+    "date": "2026-06-30",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": ".github",
+    "runs_cancelled": 4,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 4
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.7812,
+    "repo": "agent-harness",
+    "runs_cancelled": 0,
+    "runs_failed": 7,
+    "runs_passed": 25,
+    "runs_total": 32
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.525,
+    "repo": "anomra",
+    "runs_cancelled": 5,
+    "runs_failed": 19,
+    "runs_passed": 21,
+    "runs_total": 45
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.6512,
+    "repo": "anomra-infra",
+    "runs_cancelled": 4,
+    "runs_failed": 15,
+    "runs_passed": 28,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.6744,
+    "repo": "anomra-website",
+    "runs_cancelled": 1,
+    "runs_failed": 14,
+    "runs_passed": 29,
+    "runs_total": 44
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.4222,
+    "repo": "crm-dashboard",
+    "runs_cancelled": 1,
+    "runs_failed": 26,
+    "runs_passed": 19,
+    "runs_total": 46
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5854,
+    "repo": "desktop-cleanup",
+    "runs_cancelled": 6,
+    "runs_failed": 17,
+    "runs_passed": 24,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.381,
+    "repo": "find-your-scene",
+    "runs_cancelled": 5,
+    "runs_failed": 26,
+    "runs_passed": 16,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.4444,
+    "repo": "flight-finder",
+    "runs_cancelled": 4,
+    "runs_failed": 20,
+    "runs_passed": 16,
+    "runs_total": 40
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5952,
+    "repo": "gtm-toolkit",
+    "runs_cancelled": 8,
+    "runs_failed": 17,
+    "runs_passed": 25,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.3261,
+    "repo": "job-search-agent",
+    "runs_cancelled": 1,
+    "runs_failed": 31,
+    "runs_passed": 15,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5319,
+    "repo": "local-inference",
+    "runs_cancelled": 0,
+    "runs_failed": 22,
+    "runs_passed": 25,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.8571,
+    "repo": "perditio-dev-wiki",
+    "runs_cancelled": 0,
+    "runs_failed": 1,
+    "runs_passed": 6,
+    "runs_total": 7
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5814,
+    "repo": "perditio-devkit",
+    "runs_cancelled": 4,
+    "runs_failed": 18,
+    "runs_passed": 25,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.4318,
+    "repo": "perditio-infra",
+    "runs_cancelled": 3,
+    "runs_failed": 25,
+    "runs_passed": 19,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5357,
+    "repo": "perditio-kernel",
+    "runs_cancelled": 1,
+    "runs_failed": 13,
+    "runs_passed": 15,
+    "runs_total": 29
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.641,
+    "repo": "perditio-label",
+    "runs_cancelled": 8,
+    "runs_failed": 14,
+    "runs_passed": 25,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5,
+    "repo": "perditio-ledger",
+    "runs_cancelled": 3,
+    "runs_failed": 22,
+    "runs_passed": 22,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.875,
+    "repo": "perditio-os",
+    "runs_cancelled": 10,
+    "runs_failed": 5,
+    "runs_passed": 35,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5,
+    "repo": "perditio-platform",
+    "runs_cancelled": 2,
+    "runs_failed": 23,
+    "runs_passed": 23,
+    "runs_total": 48
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.6818,
+    "repo": "perditio-qa",
+    "runs_cancelled": 4,
+    "runs_failed": 14,
+    "runs_passed": 30,
+    "runs_total": 48
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5435,
+    "repo": "perditio-rag",
+    "runs_cancelled": 1,
+    "runs_failed": 21,
+    "runs_passed": 25,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.7838,
+    "repo": "perditio-runner",
+    "runs_cancelled": 9,
+    "runs_failed": 8,
+    "runs_passed": 29,
+    "runs_total": 46
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5789,
+    "repo": "perditio-secret-rotation",
+    "runs_cancelled": 9,
+    "runs_failed": 16,
+    "runs_passed": 22,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.4889,
+    "repo": "perditio-security",
+    "runs_cancelled": 2,
+    "runs_failed": 23,
+    "runs_passed": 22,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.3864,
+    "repo": "perditio-website",
+    "runs_cancelled": 2,
+    "runs_failed": 27,
+    "runs_passed": 17,
+    "runs_total": 46
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.4783,
+    "repo": "scenes-website",
+    "runs_cancelled": 1,
+    "runs_failed": 24,
+    "runs_passed": 22,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-06-30",
+    "low_signal": false,
+    "pass_rate": 0.5217,
+    "repo": "secret-rotation-core",
+    "runs_cancelled": 1,
+    "runs_failed": 22,
+    "runs_passed": 24,
+    "runs_total": 47
+  }
+]

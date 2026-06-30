@@ -1,0 +1,45 @@
+# Fleet CI pass-rate scorecard.
+# Runs the stdlib metrics script on the self-hosted perditio-os runner, then
+# commits the refreshed metrics/ci-pass-rate.json and CI_PASS_RATE.md back to
+# the default branch. ASCII only. $0: no GitHub-hosted minutes.
+name: ci-pass-rate
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # daily, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scorecard:
+    runs-on: [self-hosted, windows, perditio-os]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure Python313 on PATH
+        shell: bash
+        run: |
+          echo "C:/Python313" >> "$GITHUB_PATH"
+
+      - name: Compute scorecard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          C:/Python313/python.exe metrics/ci_pass_rate.py
+
+      - name: Commit and push if changed
+        shell: bash
+        run: |
+          git config user.name "perditio-bot"
+          git config user.email "perditio-bot@users.noreply.github.com"
+          git add metrics/ci-pass-rate.json CI_PASS_RATE.md
+          if git diff --cached --quiet; then
+            echo "No scorecard changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(metrics): refresh CI pass-rate scorecard"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
