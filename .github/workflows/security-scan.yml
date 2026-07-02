@@ -1,7 +1,6 @@
 # Vendored secret-pattern scan. Self-contained (no cross-repo reusable, no token).
-# Self-hosted (label: self-hosted/windows/perditio-os) so it consumes zero GitHub-hosted
-# minutes and never fails at allocation. Runs on PRs (pre-merge) and weekly; the push trigger
-# was dropped to cut run volume. If the runner is offline the scan queues until it is back.
+# Runs on GitHub-hosted ubuntu-latest. Runs on PRs (pre-merge) and weekly; the push trigger
+# was dropped to cut run volume.
 # CI/CD scope only (ADR-001 compliant). Reports location only - never secret values.
 # Tamper-resistant: on a PR it runs the scanner copy from the repo's DEFAULT branch, not the PR's copy.
 name: security-scan
@@ -21,12 +20,15 @@ concurrency:
 
 jobs:
   secret-scan:
-    runs-on: [self-hosted, windows, perditio-os]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - name: Secret pattern scan (location only; values never printed)
         shell: bash
         env:
