@@ -1,7 +1,7 @@
 # Fleet CI pass-rate scorecard.
-# Runs the stdlib metrics script on the self-hosted perditio-os runner, then
+# Runs the stdlib metrics script on GitHub-hosted ubuntu-latest, then
 # commits the refreshed metrics/ci-pass-rate.json and CI_PASS_RATE.md back to
-# the default branch. ASCII only. $0: no GitHub-hosted minutes.
+# the default branch. ASCII only.
 name: ci-pass-rate
 
 on:
@@ -14,22 +14,21 @@ permissions:
 
 jobs:
   scorecard:
-    runs-on: [self-hosted, windows, perditio-os]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure Python313 on PATH
-        shell: bash
-        run: |
-          echo "C:/Python313" >> "$GITHUB_PATH"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
       - name: Compute scorecard
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          C:/Python313/python.exe metrics/ci_pass_rate.py
+          python metrics/ci_pass_rate.py
 
       - name: Commit and push if changed
         shell: bash
