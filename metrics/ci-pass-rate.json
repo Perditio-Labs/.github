@@ -288,5 +288,15 @@
     "runs_failed": 1,
     "runs_passed": 1,
     "runs_total": 8
+  },
+  {
+    "date": "2026-07-03",
+    "low_signal": false,
+    "pass_rate": 0.6667,
+    "repo": ".github",
+    "runs_cancelled": 8,
+    "runs_failed": 1,
+    "runs_passed": 2,
+    "runs_total": 11
   }
 ]
