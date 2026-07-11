@@ -54,4 +54,7 @@ jobs:
             exit 0
           fi
           git commit -m "chore(metrics): refresh CI pass-rate scorecard"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          # Publish to a dedicated, unprotected metrics branch (main is protected by the org
+          # permanent-branch-protection ruleset, which blocks the automated push). The scorecard
+          # files (metrics/ci-pass-rate.json, CI_PASS_RATE.md) live on this branch.
+          git push origin "HEAD:refs/heads/ci-metrics" --force
