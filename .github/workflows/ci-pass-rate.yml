@@ -16,8 +16,21 @@ jobs:
   scorecard:
     runs-on: ubuntu-latest
     steps:
+      # Mint a fresh org-installation token from the perditio-ci-automation GitHub App each run:
+      # org-wide Actions read (so the scorecard covers all private repos, not just this one) +
+      # contents write (to push the refreshed scorecard). Replaces the repo-scoped GITHUB_TOKEN;
+      # auto-refreshing, nothing to rotate.
+      - name: Mint App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-python@v5
         with:
@@ -26,7 +39,7 @@ jobs:
       - name: Compute scorecard
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           python metrics/ci_pass_rate.py
 
