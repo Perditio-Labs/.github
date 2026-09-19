@@ -318,5 +318,455 @@
     "runs_failed": 1,
     "runs_passed": 4,
     "runs_total": 13
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.9388,
+    "repo": ".github",
+    "runs_cancelled": 0,
+    "runs_failed": 3,
+    "runs_passed": 46,
+    "runs_total": 49
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "a16z-pitch",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "agent-harness",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 46,
+    "runs_total": 46
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "aha-companion-poc-ios",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "aha-kit-recognition",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "aha-meet-live",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 9,
+    "runs_total": 9
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "anomra",
+    "runs_cancelled": 1,
+    "runs_failed": 0,
+    "runs_passed": 37,
+    "runs_total": 38
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "anomra-infra",
+    "runs_cancelled": 19,
+    "runs_failed": 0,
+    "runs_passed": 27,
+    "runs_total": 46
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "anomra-mobile",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 5,
+    "runs_total": 5
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.9375,
+    "repo": "anomra-website",
+    "runs_cancelled": 8,
+    "runs_failed": 2,
+    "runs_passed": 30,
+    "runs_total": 40
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "aws-assisting-hand-tracking-service",
+    "runs_cancelled": 2,
+    "runs_failed": 0,
+    "runs_passed": 48,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "crm-dashboard",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 32,
+    "runs_total": 32
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8605,
+    "repo": "desktop-cleanup",
+    "runs_cancelled": 4,
+    "runs_failed": 6,
+    "runs_passed": 37,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.7619,
+    "repo": "find-your-scene",
+    "runs_cancelled": 5,
+    "runs_failed": 10,
+    "runs_passed": 32,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.814,
+    "repo": "flight-finder",
+    "runs_cancelled": 1,
+    "runs_failed": 8,
+    "runs_passed": 35,
+    "runs_total": 44
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "giveaway-generator",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.64,
+    "repo": "gtm-toolkit",
+    "runs_cancelled": 0,
+    "runs_failed": 18,
+    "runs_passed": 32,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8,
+    "repo": "job-search-agent",
+    "runs_cancelled": 2,
+    "runs_failed": 9,
+    "runs_passed": 36,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "local-inference",
+    "runs_cancelled": 1,
+    "runs_failed": 0,
+    "runs_passed": 46,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "perditio-deface",
+    "runs_cancelled": 3,
+    "runs_failed": 0,
+    "runs_passed": 47,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "perditio-dev-wiki",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 50,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "perditio-devkit",
+    "runs_cancelled": 2,
+    "runs_failed": 0,
+    "runs_passed": 48,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "perditio-handtrack",
+    "runs_cancelled": 1,
+    "runs_failed": 0,
+    "runs_passed": 49,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.9773,
+    "repo": "perditio-infra",
+    "runs_cancelled": 3,
+    "runs_failed": 1,
+    "runs_passed": 43,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.6829,
+    "repo": "perditio-kernel",
+    "runs_cancelled": 1,
+    "runs_failed": 13,
+    "runs_passed": 28,
+    "runs_total": 42
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8511,
+    "repo": "perditio-label",
+    "runs_cancelled": 0,
+    "runs_failed": 7,
+    "runs_passed": 40,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8667,
+    "repo": "perditio-ledger",
+    "runs_cancelled": 2,
+    "runs_failed": 6,
+    "runs_passed": 39,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "perditio-legal",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "perditio-os",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 50,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.9348,
+    "repo": "perditio-platform",
+    "runs_cancelled": 2,
+    "runs_failed": 3,
+    "runs_passed": 43,
+    "runs_total": 48
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.9,
+    "repo": "perditio-qa",
+    "runs_cancelled": 0,
+    "runs_failed": 5,
+    "runs_passed": 45,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "perditio-rag",
+    "runs_cancelled": 1,
+    "runs_failed": 0,
+    "runs_passed": 46,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8478,
+    "repo": "perditio-runner",
+    "runs_cancelled": 0,
+    "runs_failed": 7,
+    "runs_passed": 39,
+    "runs_total": 46
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8462,
+    "repo": "perditio-secret-rotation",
+    "runs_cancelled": 8,
+    "runs_failed": 6,
+    "runs_passed": 33,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.7647,
+    "repo": "perditio-security",
+    "runs_cancelled": 32,
+    "runs_failed": 4,
+    "runs_passed": 13,
+    "runs_total": 49
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "perditio-web",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8913,
+    "repo": "perditio-website",
+    "runs_cancelled": 4,
+    "runs_failed": 5,
+    "runs_passed": 41,
+    "runs_total": 50
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "perditio-whatsapp-gateway",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 12,
+    "runs_total": 12
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.8478,
+    "repo": "scenes-website",
+    "runs_cancelled": 1,
+    "runs_failed": 7,
+    "runs_passed": 39,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 0.5122,
+    "repo": "secret-rotation-core",
+    "runs_cancelled": 6,
+    "runs_failed": 20,
+    "runs_passed": 21,
+    "runs_total": 47
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": false,
+    "pass_rate": 1.0,
+    "repo": "swarm-aero-legion-pathfinder",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 4,
+    "runs_total": 4
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "ticket-generator",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "ticket-issuer",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "whatsapp-template-generator",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
+  },
+  {
+    "date": "2026-09-19",
+    "low_signal": true,
+    "pass_rate": null,
+    "repo": "whatsapp-webhook",
+    "runs_cancelled": 0,
+    "runs_failed": 0,
+    "runs_passed": 0,
+    "runs_total": 0
   }
 ]
