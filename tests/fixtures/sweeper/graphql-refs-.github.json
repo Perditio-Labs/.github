@@ -1,0 +1,149 @@
+{
+ "data": {
+  "repository": {
+   "refs": {
+    "pageInfo": {
+     "hasNextPage": false,
+     "endCursor": null
+    },
+    "nodes": [
+     {
+      "name": "main",
+      "target": {
+       "oid": "1111111111111111111111111111111111111111",
+       "committedDate": "2026-01-01T00:00:00Z"
+      },
+      "c1": {
+       "behindBy": 0
+      },
+      "c2": {
+       "behindBy": 0
+      },
+      "heads": {
+       "totalCount": 0
+      },
+      "merged": {
+       "nodes": []
+      }
+     },
+     {
+      "name": "dev-feat/public-old",
+      "target": {
+       "oid": "dddddddddddddddddddddddddddddddddddddddd",
+       "committedDate": "2026-01-01T00:00:00Z"
+      },
+      "c1": {
+       "behindBy": 0
+      },
+      "c2": {
+       "behindBy": 0
+      },
+      "heads": {
+       "totalCount": 0
+      },
+      "merged": {
+       "nodes": []
+      }
+     },
+     {
+      "name": "dev-feat/public-squash",
+      "target": {
+       "oid": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+       "committedDate": "2026-01-01T00:00:00Z"
+      },
+      "c1": {
+       "behindBy": 3
+      },
+      "c2": {
+       "behindBy": 3
+      },
+      "heads": {
+       "totalCount": 0
+      },
+      "merged": {
+       "nodes": [
+        {
+         "headRefOid": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+         "baseRepository": {
+          "nameWithOwner": "Perditio-Labs/.github"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "name": "dev-feat/public-other-base",
+      "target": {
+       "oid": "ffffffffffffffffffffffffffffffffffffffff",
+       "committedDate": "2026-01-01T00:00:00Z"
+      },
+      "c1": {
+       "behindBy": 3
+      },
+      "c2": {
+       "behindBy": 3
+      },
+      "heads": {
+       "totalCount": 0
+      },
+      "merged": {
+       "nodes": [
+        {
+         "headRefOid": "ffffffffffffffffffffffffffffffffffffffff",
+         "baseRepository": {
+          "nameWithOwner": "Perditio-Labs/zz-secret-repo"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "name": "dev-feat/public-pushed-after",
+      "target": {
+       "oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "committedDate": "2026-01-01T00:00:00Z"
+      },
+      "c1": {
+       "behindBy": 3
+      },
+      "c2": {
+       "behindBy": 3
+      },
+      "heads": {
+       "totalCount": 0
+      },
+      "merged": {
+       "nodes": [
+        {
+         "headRefOid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         "baseRepository": {
+          "nameWithOwner": "Perditio-Labs/.github"
+         }
+        }
+       ]
+      }
+     },
+     {
+      "name": "dev-feat/public-recent",
+      "target": {
+       "oid": "cccccccccccccccccccccccccccccccccccccccc",
+       "committedDate": "2099-01-01T00:00:00Z"
+      },
+      "c1": {
+       "behindBy": 0
+      },
+      "c2": {
+       "behindBy": 0
+      },
+      "heads": {
+       "totalCount": 0
+      },
+      "merged": {
+       "nodes": []
+      }
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,105 @@
+# merge-when-green: every 15 minutes, merge open non-draft PRs labelled
+# `automerge` whose base is `dev` (never main, staging, release*), across
+# every Perditio-Labs repo, once: mergeable_state clean, >= 1 check and every
+# check run / status success, neutral or skipped (0 pending, 0 failed), head
+# quiet for 10 min (latest commit / check suite / check or status activity).
+# `behind` -> update-branch once (marker label first). Uses the repo's allowed
+# merge method and pins the inspected head sha. Never changes rulesets or
+# native auto-merge settings. PRs that touch .github/workflows/ are left for
+# a human (the App has no workflows permission).
+#
+#   - perditio-ci-automation App token (CI_APP_ID / CI_APP_PRIVATE_KEY):
+#     contents write (merge), pull requests write (update-branch, read),
+#     issues write (the automerge:branch-updated marker label),
+#     checks + commit statuses read;
+#   - capability guard: >= 30 private repos incl. the private sentinel
+#     repo(s) in the secret SWEEPER_SENTINEL_REPOS (masked; never named in
+#     this public repo); pull request,
+#     checks and statuses read plus contents / pull request / issues write
+#     probed (writes on PR 0, which cannot exist); a reach failure fails; a
+#     missing App permission is BLOCKED: nothing merged, a warning on
+#     scheduled ticks (no failure mail every 15 min), a failure on a
+#     dispatched apply;
+#   - schedule = apply; dispatch defaults to report (dry run).
+#
+# PRIVACY: this repo is PUBLIC (logs and job summaries are public). The
+# script never prints a private repo's name or PR numbers (counts only).
+# RUNNER: GitHub-hosted ubuntu-latest, like every workflow in this repo (the
+# Perditio self-hosted runner group excludes public repos). Logic:
+# scripts/merge_when_green.sh. ASCII only.
+
+name: merge-when-green
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'   # every 15 min, off the quarter hour
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "report = dry run (nothing merged); apply = merge / update-branch"
+        type: choice
+        options: [report, apply]
+        default: report
+
+permissions:
+  contents: read
+
+concurrency:
+  group: merge-when-green
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MODE: ${{ github.event_name == 'schedule' && 'apply' || inputs.mode }}
+      STRICT: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+      OUT_DIR: merge-out
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Guard tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/test_hygiene_lib.sh
+          bash tests/test_merge_when_green.sh
+
+      - name: Mint perditio-ci-automation App token (org-wide)
+        id: app-token
+        # SHA-pinned (privileged token minter). v1.12.0.
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Merge when green
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          # A secret, not a variable: secrets are masked in this public repo's logs.
+          SENTINEL_REPOS: ${{ secrets.SWEEPER_SENTINEL_REPOS }}
+        run: |
+          set -euo pipefail
+          export APP_BOT="${APP_SLUG:-perditio-ci-automation}[bot]"
+          echo "mode=$MODE strict=$STRICT app=$APP_BOT"
+          bash scripts/merge_when_green.sh
+          if grep -q '^BLOCKED' "$OUT_DIR/capability.txt" 2>/dev/null; then
+            echo "::warning::$(cat "$OUT_DIR/capability.txt")"
+          fi
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$OUT_DIR/summary.md" ]; then
+            cat "$OUT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "# Merge when green: NO SUMMARY (see the step log)" >> "$GITHUB_STEP_SUMMARY"
+          fi

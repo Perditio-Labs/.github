@@ -1,0 +1,154 @@
+# private-name-guard: fail any PR or push to main that adds a PRIVATE
+# Perditio-Labs repo name to this PUBLIC repo.
+#
+# WHY (2026-10-26): the previous public Perditio-Labs/.github published 50+
+# private repo names for four months through a CI scorecard. This guard lists
+# the private names at RUNTIME with a read-only GitHub App token (nothing
+# private is stored here) and scans git OBJECTS (never a diff):
+#   same-repo PR: every blob, path and commit object the PR adds (incl. a name
+#     added in one commit and removed in a later one), the PR title, body and
+#     branch name
+#     (read from the event JSON file, never via step env: the runner prints
+#     step env values in the public log);
+#   push to main: every path and blob of the current tree, plus every pushed
+#     commit, blob and path (the whole history on a first push).
+# Logs and annotations here are PUBLIC: the script prints only file:line and a
+# count, never a name, and masks a name that sits inside a path.
+#
+# Trust model:
+#   - job `guard` runs on pull_request_target, i.e. the workflow, script and
+#     allowlist come from the BASE branch; the PR's commits are fetched as
+#     data and only read with git (rev-list / ls-tree / cat-file). No PR code
+#     runs in a job that holds the token, and a PR cannot edit the guard that
+#     judges it.
+#   - job `self-test` runs the PR's own copy of the tests on pull_request, with
+#     no secrets, so changes to the guard are still tested.
+#   - fork PRs are NOT scanned (skipped with a visible notice): a fork author
+#     could otherwise use pass/fail as an oracle to test guesses of private
+#     names. A maintainer reviews fork PRs; the push to main scans the result.
+#
+# Runner: GitHub-hosted by default (free for public repos). Self-hosted
+# runners must not serve a public repo, and the Perditio self-hosted runner
+# group does not allow public repos. Override only with the repo variable
+# PERDITIO_PUBLIC_CI_RUNS_ON.
+#
+# Credential: the org-read GitHub App (org secrets ORG_READ_APP_ID +
+# ORG_READ_APP_PRIVATE_KEY, visibility all), token minted with metadata:read
+# only. Capability guard: if the token lists fewer than 20 private repos the
+# job FAILS ("cannot list private repos, so this guard cannot fire").
+#
+# Logic: scripts/private_name_guard.py (stdlib). Tests:
+# tests/test_private_name_guard.py. ASCII only.
+
+name: private-name-guard
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-name-guard-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  self-test:
+    # The PR's own guard tests, unprivileged (no secrets referenced).
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ fromJSON(vars.PERDITIO_PUBLIC_CI_RUNS_ON || '["ubuntu-latest"]') }}
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        # SHA-pinned v4.2.2.
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Guard self-test (offline fixtures)
+        shell: bash
+        run: python3 -I -B tests/test_private_name_guard.py
+
+  fork-pr-notice:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ${{ fromJSON(vars.PERDITIO_PUBLIC_CI_RUNS_ON || '["ubuntu-latest"]') }}
+    timeout-minutes: 2
+    steps:
+      - name: Skip (fork PRs are not scanned)
+        run: |
+          echo "::notice title=private-name-guard skipped::Fork PRs are not scanned (pass/fail would let a fork author test guesses of private names). A maintainer must review this PR by hand; the push-to-main run scans the merged history."
+          echo "## private-name-guard: SKIPPED (fork PR). The push-to-main run scans the merged history." >> "$GITHUB_STEP_SUMMARY"
+
+  guard:
+    if: >-
+      (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name == github.repository)
+      || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ fromJSON(vars.PERDITIO_PUBLIC_CI_RUNS_ON || '["ubuntu-latest"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the TRUSTED revision (PR base, or the pushed main)
+        # SHA-pinned v4.2.2.
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Guard self-test (trusted copy, offline fixtures)
+        shell: bash
+        run: python3 -I -B tests/test_private_name_guard.py
+
+      - name: Fetch the PR commits as data (never checked out, never executed)
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+          # Fail closed if the event's head commit is not available.
+          git cat-file -e "${HEAD_SHA}^{commit}"
+
+      - name: Mint read-only org token (org-read App, metadata:read)
+        id: app-token
+        # SHA-pinned (privileged token minter). v1.12.0.
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547
+        with:
+          app-id: ${{ secrets.ORG_READ_APP_ID }}
+          private-key: ${{ secrets.ORG_READ_APP_PRIVATE_KEY }}
+          owner: Perditio-Labs
+          permission-metadata: read
+
+      - name: Scan for private repo names (names are never printed)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set +e -uo pipefail   # GitHub runs bash with -e; exit codes are mapped below
+          args=(--org Perditio-Labs --min-private 20 --allowlist scripts/private-name-allowlist.txt)
+          if [ "$EVENT" = "pull_request_target" ]; then
+            python3 -I -B scripts/private_name_guard.py "${args[@]}" --diff "$BASE_SHA" "$HEAD_SHA" --pr-event
+          elif [ "$EVENT" = "push" ] && [ -n "${BEFORE_SHA//0/}" ] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            # Current tree in full + every pushed commit, blob and path.
+            python3 -I -B scripts/private_name_guard.py "${args[@]}" --tree --since "$BEFORE_SHA"
+          else
+            # First push or unknown base: current tree + the WHOLE history.
+            python3 -I -B scripts/private_name_guard.py "${args[@]}" --tree
+          fi
+          rc=$?
+          case "$rc" in
+            0) echo "## private-name-guard: PASS" >> "$GITHUB_STEP_SUMMARY" ;;
+            1) echo "## private-name-guard: FAIL (private repo name found; see the log for file:line, names withheld)" >> "$GITHUB_STEP_SUMMARY" ;;
+            2) echo "## private-name-guard: FAIL (capability guard: the token cannot list private repos)" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "## private-name-guard: FAIL (guard error $rc)" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
+          exit "$rc"

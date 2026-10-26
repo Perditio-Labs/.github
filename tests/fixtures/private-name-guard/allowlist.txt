@@ -1,0 +1,2 @@
+# test fixture allowlist (generic word that is a fixture private name)
+website

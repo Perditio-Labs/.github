@@ -1,0 +1,9 @@
+# private-name-allowlist.txt - GENERIC words that happen to be private repo
+# names and must never fail the private-name guard. One per line, case does
+# not matter, '#' starts a comment.
+#
+# THIS FILE IS PUBLIC. Add ONLY ordinary words (a word you would find in a
+# dictionary or a generic tech term). Never add a product, client, project or
+# codename: if a real private name trips the guard, remove it from the change.
+# Names shorter than 5 characters are already ignored.
+# (no entries yet)

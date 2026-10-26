@@ -1,0 +1,34 @@
+[
+ {
+  "name": ".github",
+  "archived": false,
+  "fork": false,
+  "private": false,
+  "mirror_url": null,
+  "default_branch": "main"
+ },
+ {
+  "name": "zz-private-sentinel",
+  "archived": false,
+  "fork": false,
+  "private": true,
+  "mirror_url": null,
+  "default_branch": "main"
+ },
+ {
+  "name": "zz-secret-repo",
+  "archived": false,
+  "fork": false,
+  "private": true,
+  "mirror_url": null,
+  "default_branch": "main"
+ },
+ {
+  "name": "zz-archived-secret",
+  "archived": true,
+  "fork": false,
+  "private": true,
+  "mirror_url": null,
+  "default_branch": "main"
+ }
+]

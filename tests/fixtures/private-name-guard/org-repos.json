@@ -1,0 +1,9 @@
+[
+  {"name": "secret-widget-api", "private": true},
+  {"name": "hidden-roadmap", "private": true},
+  {"name": "payroll-export", "private": true},
+  {"name": "website", "private": true},
+  {"name": "tiny", "private": true},
+  {"name": ".github", "private": false},
+  {"name": "open-thing", "private": false}
+]
