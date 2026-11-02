@@ -1,0 +1,11 @@
+name: release-milestone
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+jobs:
+  release-milestone:
+    uses: Perditio-Labs/.github/.github/workflows/release-milestone.yml@main

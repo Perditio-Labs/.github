@@ -1,0 +1,14 @@
+# Per-repo caller (use ONLY if the org ruleset workflows rule is not in force for this repo).
+name: pr-milestone
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review, milestoned, demilestoned]
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+jobs:
+  pr-milestone:
+    uses: Perditio-Labs/.github/.github/workflows/pr-milestone.yml@main
+    with:
+      mode: ""   # empty = org variable PR_MILESTONE_MODE (assign during rollout, then enforce)
