@@ -55,7 +55,7 @@ variable back to `assign`.
 - **`release-milestone`** - when a release is published, `release-milestone.yml` milestones every merged PR in the tag that has none, closes milestone `X.Y.Z`, opens `X.Y.(Z+1)` and ends the release notes with `Milestone: <url>`.
 - Open the PR with `gh pr create --milestone <X.Y.Z>`; create the milestone first if absent: `gh api repos/<org>/<repo>/milestones -f title=<X.Y.Z>`.
 
-## Proposed PR template field (ptr-devkit and perditio-devkit `.github/pull_request_template.md`)
+## Proposed PR template field (each org devkit repo, `.github/pull_request_template.md`)
 
 Add under `## Summary` (the governance parsers key on other headings; this one is additive):
 
