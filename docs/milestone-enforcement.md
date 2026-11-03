@@ -52,7 +52,7 @@ variable back to `assign`.
 ## Proposed GitFlow text (add to GITFLOW.md under "Governance")
 
 - **`pr-milestone`** - every PR (into `dev`, `staging` and `main`) must carry a milestone titled with a release version (`X.Y.Z`, optional `v`, optional `-pre`). Enforced org-wide by the `.github` repo workflow `pr-milestone.yml` (mode `assign` or `enforce`, org variable `PR_MILESTONE_MODE`). The milestone is the version the PR ships in; the next version's milestone exists before work starts.
-- **`release-milestone`** - when a release is published, `release-milestone.yml` milestones every merged PR in the tag that has none, closes milestone `X.Y.Z`, opens `X.Y.(Z+1)` and ends the release notes with `Milestone: <url>`.
+- **`release-milestone`** - when a release is published, `release-milestone.yml` milestones every merged PR in the tag that has none, closes milestone `X.Y.Z` (its due date is the release's Pacific date and line 1 of its description is `Released YYYY-MM-DD HH:MM PT - <release url>`; created first if missing), opens `X.Y.(Z+1)` and ends the release notes with `Milestone: <url>`.
 - Open the PR with `gh pr create --milestone <X.Y.Z>`; create the milestone first if absent: `gh api repos/<org>/<repo>/milestones -f title=<X.Y.Z>`.
 
 ## Proposed PR template field

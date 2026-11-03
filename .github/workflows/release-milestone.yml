@@ -3,7 +3,8 @@
 #      association of every commit; fails, changing nothing, above 500 commits);
 #   2. give each one that has NO milestone the X.Y.Z milestone (created if missing; never moves
 #      an existing milestone);
-#   3. CLOSE milestone X.Y.Z and OPEN the next patch milestone X.Y.(Z+1) (stable releases only;
+#   3. CLOSE milestone X.Y.Z (due_on = the release's Pacific date as YYYY-MM-DDT12:00:00Z; description line 1 =
+#      "Released YYYY-MM-DD HH:MM PT - <release url>"; created first if missing) and OPEN the next patch milestone X.Y.(Z+1) (stable releases only;
 #      a pre-release tag assigns but does not close or open);
 #   4. on a release event, append "Milestone: <url>" to the release notes if absent.
 # Membership: an associated PR counts only if its merge commit is inside the tag range. Runs are serialised
@@ -129,9 +130,31 @@ jobs:
               if (!dry) await github.rest.issues.update({ owner, repo, issue_number: n, milestone: ms.number });
               assigned++;
             }
-            // 5. close this version, open (or reopen) the next patch (stable only)
+            // 5. close this version (stamped with the release date), open (or reopen) the next patch (stable only)
             if (stable) {
-              if (ms && ms.state !== 'closed') { log.push(`close milestone ${title}`); if (!dry) await github.rest.issues.updateMilestone({ owner, repo, milestone_number: ms.number, state: 'closed' }); }
+              if (ms) {
+                // release date: the release's published_at (event payload, else the release for this tag), else the tag's last commit, else now.
+                let rel = context.payload && context.payload.release && context.payload.release.tag_name === tag ? context.payload.release : null;
+                if (!rel) { try { rel = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data; } catch (e) { if (e.status !== 404) throw e; } }
+                const lastCommit = commits.length ? commits[commits.length - 1] : null;
+                const stamp = (rel && (rel.published_at || rel.created_at)) || (lastCommit && lastCommit.commit && lastCommit.commit.committer && lastCommit.commit.committer.date) || null;
+                const when = new Date(stamp || Date.now());   // no timestamp anywhere: now (then a re-run never rewrites an existing header)
+                const pt = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(when).map((x) => [x.type, x.value]));
+                const day = `${pt.year}-${pt.month}-${pt.day}`;
+                const first = `Released ${day} ${pt.hour}:${pt.minute} PT - ${(rel && rel.html_url) || `https://github.com/${owner}/${repo}/releases/tag/${tag}`}`;
+                // only the line this workflow writes is replaced; any other description text (even one starting with "Released") is kept verbatim
+                const GEN = /^Released \d{4}-\d{2}-\d{2} \d{2}:\d{2} PT - \S+[ \t]*(?:\r?\n|$)/;
+                const desc0 = String(ms.description || '');
+                const hasGen = GEN.test(desc0);
+                const have = hasGen ? desc0.split(/\r?\n/)[0].trimEnd() : null;
+                const rest = hasGen ? desc0.replace(GEN, '') : desc0;
+                const dueOk = String(ms.due_on || '').slice(0, 10) === day;
+                const done = ms.state === 'closed' && hasGen && ms.due_on && (!stamp || (dueOk && have === first));
+                if (!done) {
+                  log.push(`close milestone ${title} (due ${day}, ${first})`);
+                  if (!dry) await github.rest.issues.updateMilestone({ owner, repo, milestone_number: ms.number, state: 'closed', due_on: `${day}T12:00:00Z`, description: rest ? `${first}\n${rest}` : first });
+                }
+              }
               const nextTitle = `${ver.maj}.${ver.min}.${ver.pat + 1n}`;
               const next = all.find((m) => { const v = parse(m.title); return v && cmp(v, parse(nextTitle)) === 0; });
               if (!next) { log.push(`create milestone ${nextTitle}`); if (!dry) await ensure(nextTitle); }
