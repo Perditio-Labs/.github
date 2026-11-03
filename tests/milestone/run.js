@@ -151,6 +151,25 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
     // no release object at all (tag push): falls back to the last commit date, else now; url is the tag URL
     d1 = rs(); d1.commits = commits.map((c, i) => i === commits.length - 1 ? Object.assign({}, c, { commit: { message: c.commit.message, committer: { date: '2026-10-30T01:00:00Z' } } }) : c);
     cc = closeCall(await runRel(org, 'v1.3.1', d1, false)); ok(cc && cc[1].due_on === '2026-10-29T12:00:00Z' && /^Released 2026-10-29 18:00 PT - https:\/\/github\.com\/o\/r\/releases\/tag\/v1\.3\.1$/.test(cc[1].description), org + ' fallback to commit date');
+    // wrong existing due date is corrected even when the header line is right
+    d1 = rs(); d1.release = REL('2026-11-02T20:15:00Z'); d1.ms[0].state = 'closed'; d1.ms[0].due_on = '2030-01-01T12:00:00Z'; d1.ms[0].description = 'Released 2026-11-02 12:15 PT - https://github.com/o/r/releases/tag/v1.3.1';
+    cc = closeCall(await runRel(org, 'v1.3.1', d1, false)); ok(cc && cc[1].due_on === '2026-11-02T12:00:00Z', org + ' wrong due_on is corrected');
+    // ordinary prose that starts with "Released" is kept verbatim (indent too); only the generated header line is ever replaced
+    d1 = rs(); d1.release = REL('2026-11-02T20:15:00Z'); d1.ms[0].description = 'Released components include the API and UI.\n  Indented scope';
+    cc = closeCall(await runRel(org, 'v1.3.1', d1, false)); ok(cc && cc[1].description === 'Released 2026-11-02 12:15 PT - https://github.com/o/r/releases/tag/v1.3.1\nReleased components include the API and UI.\n  Indented scope', org + ' prose starting with Released kept verbatim');
+    // Pacific midnight and the autumn DST change (2026-11-01 02:00 PDT -> 01:00 PST)
+    for (const [iso, want] of [['2026-11-02T08:00:00Z', '2026-11-02 00:00'], ['2026-11-02T07:59:59Z', '2026-11-01 23:59'], ['2026-11-01T08:59:00Z', '2026-11-01 01:59'], ['2026-11-01T09:00:00Z', '2026-11-01 01:00'], ['2026-03-08T09:59:00Z', '2026-03-08 01:59'], ['2026-03-08T10:00:00Z', '2026-03-08 03:00']]) {
+      d1 = rs(); d1.release = REL(iso); cc = closeCall(await runRel(org, 'v1.3.1', d1, false));
+      ok(cc && cc[1].description.startsWith('Released ' + want + ' PT - ') && cc[1].due_on === want.slice(0, 10) + 'T12:00:00Z', org + ' pacific ' + iso + ' -> ' + (cc && cc[1].description.slice(0, 26)));
+    }
+    // the payload release wins over the API release for the same tag; a payload for ANOTHER tag is ignored
+    d1 = rs(); d1.release = REL('2026-11-05T20:00:00Z'); m = await runRel(org, 'v1.3.1', d1, false, REL('2026-11-02T20:15:00Z'));
+    cc = closeCall(m); ok(cc && cc[1].due_on === '2026-11-02T12:00:00Z', org + ' payload release wins');
+    d1 = rs(); d1.release = REL('2026-11-05T20:00:00Z'); m = await runRel(org, 'v1.3.1', d1, false, REL('2026-11-02T20:15:00Z', { tag_name: 'v9.9.9' }));
+    cc = closeCall(m); ok(cc && cc[1].due_on === '2026-11-05T12:00:00Z', org + ' payload for another tag ignored');
+    // no timestamp anywhere: stamped with now once, and a re-run never rewrites that header
+    d1 = rs(); m = await runRel(org, 'v1.3.1', d1, false); ok(!!closeCall(m), org + ' no-timestamp first run stamps');
+    m = await runRel(org, 'v1.3.1', d1, false); ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' no-timestamp re-run is a no-op');
     // pre-release and dry run never stamp
     d1 = rs(); d1.ms = []; m = await runRel(org, 'v1.3.2-rc.2', d1, false);
     ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' pre-release: no date stamp, no close');
