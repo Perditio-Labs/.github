@@ -1,0 +1,151 @@
+# release-milestone: at release time, for version X.Y.Z (release published, or tag push vX.Y.Z):
+#   1. find every merged PR between the previous ANCESTOR version tag and this tag (commit->PR
+#      association of every commit; fails, changing nothing, above 500 commits);
+#   2. give each one that has NO milestone the X.Y.Z milestone (created if missing; never moves
+#      an existing milestone);
+#   3. CLOSE milestone X.Y.Z and OPEN the next patch milestone X.Y.(Z+1) (stable releases only;
+#      a pre-release tag assigns but does not close or open);
+#   4. on a release event, append "Milestone: <url>" to the release notes if absent.
+# Membership: an associated PR counts only if its merge commit is inside the tag range. Runs are serialised
+# per repo; a run dropped from the queue is re-run with workflow_dispatch (dry_run=false). Reopening the next
+# patch happens only when no newer stable tag exists. Idempotent: re-running (release + tag push both fire) changes nothing the second time.
+# Caller: see docs/release-milestone-caller.example.yml. Input dry_run=true only logs.
+# Uses only GITHUB_TOKEN (issues + pull-requests write; contents write ONLY for step 4).
+# Runs on the Perditio org runners (self-hosted, Linux, X64, perditio). ASCII only.
+name: release-milestone
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        default: ''
+        description: 'tag to process; empty = from the release/push event'
+      dry_run:
+        type: boolean
+        default: false
+      append_release_link:
+        type: boolean
+        default: true
+      runs_on:
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+      dry_run:
+        type: boolean
+        default: true
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+concurrency:
+  group: release-milestone-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  release-milestone:
+    name: release-milestone
+    runs-on: ${{ fromJSON(inputs.runs_on || '["self-hosted","Linux","X64","perditio"]') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          IN_TAG: ${{ inputs.tag }}
+          DRY: ${{ inputs.dry_run }}
+          APPEND: ${{ inputs.append_release_link }}
+        with:
+          script: |
+            const dry = process.env.DRY === 'true';
+            const append = process.env.APPEND !== 'false';
+            const SEMVER = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+            const parse = (t) => { const m = SEMVER.exec(String(t || '').trim()); return m ? { maj: BigInt(m[1]), min: BigInt(m[2]), pat: BigInt(m[3]), pre: m[4] || null } : null; };
+            const cmpId = (a, b) => { const an = /^\d+$/.test(a), bn = /^\d+$/.test(b); if (an && bn) { const x = BigInt(a), y = BigInt(b); return x < y ? -1 : x > y ? 1 : 0; } if (an) return -1; if (bn) return 1; return a < b ? -1 : a > b ? 1 : 0; };
+            const cmp = (a, b) => {
+              for (const k of ['maj', 'min', 'pat']) if (a[k] !== b[k]) return a[k] < b[k] ? -1 : 1;
+              if (a.pre === b.pre) return 0; if (!a.pre) return 1; if (!b.pre) return -1;
+              const x = a.pre.split('.'), y = b.pre.split('.');
+              for (let i = 0; i < Math.max(x.length, y.length); i++) { if (x[i] === undefined) return -1; if (y[i] === undefined) return 1; const c = cmpId(x[i], y[i]); if (c) return c; }
+              return 0;
+            };
+            const { owner, repo } = context.repo;
+            let tag = process.env.IN_TAG || '';
+            if (!tag && context.payload.release) tag = context.payload.release.tag_name;
+            if (!tag && String(context.ref || '').startsWith('refs/tags/')) tag = context.ref.slice(10);
+            const ver = parse(tag);
+            if (!ver) { core.notice(`release-milestone: tag "${tag}" is not a version; nothing to do.`); return; }
+            const title = `${ver.maj}.${ver.min}.${ver.pat}${ver.pre ? '-' + ver.pre : ''}`;
+            const stable = !ver.pre;
+            const log = [];
+            // create-or-recover: a concurrent run may have created it (422), or it may exist closed
+            const ensure = async (t) => {
+              try { return (await github.rest.issues.createMilestone({ owner, repo, title: t })).data; } catch (e) {
+                if (e.status !== 422) throw e;
+                const cur = (await github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'all', per_page: 100 })).find((m) => m.title === t);
+                if (!cur) throw e; return cur;
+              }
+            };
+            // 1. previous tag: greatest lower version tag that is an ANCESTOR of this tag
+            const tags = (await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 }))
+              .map((t) => ({ name: t.name, v: parse(t.name) })).filter((x) => x.v && x.name !== tag);
+            const lower = tags.filter((x) => cmp(x.v, ver) < 0 && (!stable || !x.v.pre)).sort((a, b) => cmp(b.v, a.v));
+            let prev = null, commits = null;
+            for (const cand of lower) {
+              const r = await github.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${cand.name}...${tag}`, per_page: 1 });
+              if (r.data.status === 'ahead' || r.data.status === 'identical') {
+                prev = cand.name;
+                commits = await github.paginate(github.rest.repos.compareCommitsWithBasehead, { owner, repo, basehead: `${prev}...${tag}`, per_page: 100 }, (x) => x.data.commits);
+                break;
+              }
+            }
+            if (!prev) {
+              core.setFailed(`release-milestone: no ancestor version tag found for ${tag}; first release or divergent history. Run the backfill script by hand. Nothing was changed.`);
+              return;
+            }
+            const shas = new Set(commits.map((c) => c.sha));
+            // 2. PRs from the commit->PR association of EVERY commit (message text is not trusted)
+            const MAX = 500;
+            if (commits.length > MAX) { core.setFailed(`release-milestone: ${commits.length} commits exceed the ${MAX} lookup cap; use the backfill script. Nothing was changed.`); return; }
+            const nums = new Set();
+            for (const c of commits) {
+              for (const p of await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, { owner, repo, commit_sha: c.sha, per_page: 100 })) nums.add(p.number);
+            }
+            // 3. the version milestone (find, else create)
+            const all = await github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'all', per_page: 100 });
+            let ms = all.find((m) => { const v = parse(m.title); return v && cmp(v, ver) === 0; });
+            if (!ms) {
+              log.push(`create milestone ${title}`);
+              if (!dry) ms = await ensure(title);
+            }
+            // 4. assign merged, un-milestoned PRs
+            let assigned = 0, kept = 0, skipped = 0;
+            for (const n of [...nums].sort((a, b) => a - b)) {
+              let pr;
+              try { pr = (await github.rest.pulls.get({ owner, repo, pull_number: n })).data; } catch (e) { if (e.status === 404) { skipped++; continue; } throw e; }
+              if (!pr.merged_at || !shas.has(pr.merge_commit_sha)) { skipped++; continue; }
+              if (pr.milestone) { kept++; continue; }
+              log.push(`assign #${n} -> ${title}`);
+              if (!dry) await github.rest.issues.update({ owner, repo, issue_number: n, milestone: ms.number });
+              assigned++;
+            }
+            // 5. close this version, open (or reopen) the next patch (stable only)
+            if (stable) {
+              if (ms && ms.state !== 'closed') { log.push(`close milestone ${title}`); if (!dry) await github.rest.issues.updateMilestone({ owner, repo, milestone_number: ms.number, state: 'closed' }); }
+              const nextTitle = `${ver.maj}.${ver.min}.${ver.pat + 1n}`;
+              const next = all.find((m) => { const v = parse(m.title); return v && cmp(v, parse(nextTitle)) === 0; });
+              if (!next) { log.push(`create milestone ${nextTitle}`); if (!dry) await ensure(nextTitle); }
+              else if (next.state === 'closed' && !tags.some((x) => !x.v.pre && cmp(x.v, ver) > 0)) { log.push(`reopen milestone ${next.title}`); if (!dry) await github.rest.issues.updateMilestone({ owner, repo, milestone_number: next.number, state: 'open' }); }
+            }
+            // 6. release notes link (always re-fetch the release for THIS tag; never trust the payload body)
+            if (append && ms) {
+              let rel = null;
+              try { rel = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data; } catch (e) { if (e.status !== 404) throw e; }
+              if (rel && !/(^|\n)\s*Milestone:\s*https?:\/\//.test(rel.body || '')) {
+                log.push(`append Milestone link to release ${tag}`);
+                if (!dry) await github.rest.repos.updateRelease({ owner, repo, release_id: rel.id, body: `${(rel.body || '').replace(/\s+$/, '')}\n\nMilestone: ${ms.html_url}\n` });
+              }
+            }
+            const line = `release-milestone ${tag}${dry ? ' (DRY RUN)' : ''}: prev=${prev} commits=${commits.length} prs=${nums.size} assigned=${assigned} kept=${kept} skipped=${skipped}`;
+            core.notice(line);
+            await core.summary.addRaw([line, ...log.map((l) => '- ' + l)].join('\n')).write();
