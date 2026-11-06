@@ -14,7 +14,7 @@
 # opened/synchronize/reopened only), so a milestone removed after a green run is not re-checked until the
 # next push; the per-repo caller (docs/pr-milestone-caller.example.yml) honours all types.
 # Safety: never checks out or runs PR code; only GITHUB_TOKEN (pull-requests + issues write).
-# Runs on the Perditio org runners (self-hosted, Linux, X64, perditio); ubuntu-latest not used. ASCII only.
+# Private callers use org runners; public events default to GitHub-hosted. ASCII only.
 name: pr-milestone
 on:
   pull_request:
@@ -25,6 +25,10 @@ on:
         type: string
         default: ''
         description: 'enforce | assign (empty = variable PR_MILESTONE_MODE, else enforce)'
+      target_version:
+        type: string
+        default: ''
+        description: 'Deliberate version target; validates existing milestones and selects assignment'
       runs_on:
         type: string
         default: ''
@@ -39,11 +43,12 @@ concurrency:
 jobs:
   pr-milestone:
     name: pr-milestone
-    runs-on: ${{ fromJSON(inputs.runs_on || '["self-hosted","Linux","X64","perditio"]') }}
+    runs-on: ${{ fromJSON(inputs.runs_on || (github.event.repository.private == false && (vars.PERDITIO_PUBLIC_CI_RUNS_ON || '["ubuntu-latest"]')) || '["self-hosted","Linux","X64","perditio"]') }}
     timeout-minutes: 5
     steps:
       - uses: actions/github-script@v7
         env:
+          TARGET_VERSION: ${{ inputs.target_version || vars.PR_MILESTONE_TARGET_VERSION }}
           MODE: ${{ inputs.mode || vars.PR_MILESTONE_MODE || 'enforce' }}
         with:
           script: |
@@ -64,7 +69,10 @@ jobs:
             if (!number) { core.setFailed('pr-milestone: no pull_request in the event payload'); return; }
             // Re-fetch: milestoned/demilestoned payloads can be stale.
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const target = String(process.env.TARGET_VERSION || '').trim();
+            if (target && !parse(target)) { core.setFailed('pr-milestone: target_version must be a valid version'); return; }
             const ms = pr.milestone;
+            if (ms && target && (!parse(ms.title) || cmp(parse(ms.title), parse(target)) !== 0)) { core.setFailed(`PR #${number}: milestone does not match target version ${target}`); return; }
             if (ms) {
               if (parse(ms.title)) { core.notice(`PR #${number}: milestone "${ms.title}" is a version. OK.`); return; }
               core.setFailed(`PR #${number}: milestone "${ms.title}" is not a version. Rename it or pick a version milestone (X.Y.Z, optional leading v, optional -pre-release).`);
@@ -77,12 +85,12 @@ jobs:
             // mode === assign
             const open = (await github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'open', per_page: 100 }))
               .map((m) => ({ m, v: parse(m.title) })).filter((x) => x.v).sort((a, b) => cmp(a.v, b.v));
-            let chosen = open.length ? open[0].m : null;
+            let chosen = target ? open.find(x => cmp(x.v, parse(target)) === 0)?.m : (open.length ? open[0].m : null);
             if (!chosen) {
               const tags = (await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 }, (r, done) => r.data))
                 .map((t) => ({ t, v: parse(t.name) })).filter((x) => x.v).sort((a, b) => cmp(b.v, a.v));
-              let next = '0.0.1';
-              if (tags.length) { const v = tags[0].v; next = v.pre ? `${v.maj}.${v.min}.${v.pat}` : `${v.maj}.${v.min}.${v.pat + 1n}`; }
+              let next = target || '0.0.1';
+              if (!target && tags.length) { const v = tags[0].v; next = v.pre ? `${v.maj}.${v.min}.${v.pat}` : `${v.maj}.${v.min}.${v.pat + 1n}`; }
               try {
                 chosen = (await github.rest.issues.createMilestone({ owner, repo, title: next })).data;
               } catch (e) {

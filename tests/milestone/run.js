@@ -9,7 +9,15 @@ function mock(state) {
   const calls = [];
   const rec = (n, f) => async (a) => { calls.push([n, a]); return f(a); };
   const github = {
-    paginate: async (fn, args, map) => { const r = await fn(args); return map ? map(r) : r.data; },
+    paginate: async (fn, args, map) => {
+      const all = []; let stopped = false;
+      for (let page = 1; page <= 10; page++) {
+        const r = await fn({...args, page});
+        all.push(...(map ? map(r, () => { stopped = true; }) : r.data));
+        if (stopped || !r.next) return all;
+      }
+      throw new Error('fixture pagination did not terminate');
+    },
     rest: {
       pulls: { get: rec('pulls.get', async (a) => { if (!state.prs[a.pull_number]) { const e = new Error('nf'); e.status = 404; throw e; } return { data: state.prs[a.pull_number] }; }) },
       issues: {
@@ -21,7 +29,10 @@ function mock(state) {
       repos: {
         listTags: async () => ({ data: state.tags.map((name) => ({ name })) }),
         compareCommitsWithBasehead: async (a) => ({ data: { status: (state.diverged || []).includes(a.basehead.split('...')[0]) ? 'diverged' : 'ahead', commits: state.commits } }),
-        listCommits: async () => ({ data: state.commits }),
+        listCommits: rec('listCommits', async (a) => {
+          const data = state.paged ? state.commits.slice((a.page - 1) * 100, a.page * 100) : state.commits;
+          return {data, next: state.paged && a.page * 100 < state.commits.length};
+        }),
         listPullRequestsAssociatedWithCommit: rec('assoc', async (a) => ({ data: ((state.assocMap || {})[a.commit_sha] || []).map((number) => ({ number })) })),
         getReleaseByTag: async () => { if (state.release) return { data: state.release }; const e = new Error('nf'); e.status = 404; throw e; },
         updateRelease: rec('updateRelease', async () => ({})),
@@ -38,7 +49,7 @@ const ok = (c, name) => { if (c) pass++; else { fail++; console.log('FAIL', name
 
 async function runPr(org, mode, state, prNum = 7) {
   const s = wf(org, 'pr-milestone.yml');
-  process.env.MODE = mode;
+  process.env.MODE = mode; process.env.TARGET_VERSION = state.target || '';
   const m = mock(state);
   const ctx = { repo: { owner: 'o', repo: 'r' }, payload: { pull_request: { number: prNum } }, eventName: 'pull_request' };
   await new AsyncFunction('github', 'context', 'core', s)(m.github, ctx, m.core);
@@ -46,7 +57,7 @@ async function runPr(org, mode, state, prNum = 7) {
 }
 async function runRel(org, tag, state, dry = false, release = null) {
   const s = wf(org, 'release-milestone.yml');
-  process.env.IN_TAG = tag; process.env.DRY = String(dry); process.env.APPEND = 'true';
+  process.env.IN_TAG = tag; process.env.DRY = String(dry); process.env.APPEND = 'true'; process.env.VERSION = state.version || ''; process.env.PREVIOUS_TAG = state.previous || '';
   const m = mock(state);
   const ctx = { repo: { owner: 'o', repo: 'r' }, payload: release ? { release } : {}, ref: '' };
   await new AsyncFunction('github', 'context', 'core', s)(m.github, ctx, m.core);
@@ -83,7 +94,7 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
 
     // release
     const commits = [{ sha: 'a', commit: { message: 'feat: x (#11)\n\nbody' } }, { sha: 'b', commit: { message: 'Merge pull request #12 from o/dev-fix/x' } }, { sha: 'c', commit: { message: 'plain commit' } }, { sha: 'd', commit: { message: 'fix: y (#13)' } }, { sha: 'e', commit: { message: 'fix: z (#14)' } }];
-    const rs = () => ({ prs: { 11: { number: 11, merged_at: 't', merge_commit_sha: 'a', milestone: null }, 12: { number: 12, merged_at: 't', merge_commit_sha: 'b', milestone: M(5, '1.3.0') }, 13: { number: 13, merged_at: null, milestone: null }, 15: { number: 15, merged_at: 't', merge_commit_sha: 'c', milestone: null } }, ms: [M(7, '1.3.1')], tags: ['v1.3.0', 'v1.3.1', 'v1.2.9', 'v1.3.2-rc.1'], commits, assocMap: { a: [11], b: [12], c: [15], d: [13] } });
+    const rs = () => ({ prs: { 11: { number: 11, merged_at: 't', merge_commit_sha: 'a', milestone: null }, 12: { number: 12, merged_at: 't', merge_commit_sha: 'b', milestone: M(5, '1.3.0') }, 13: { number: 13, merged_at: null, milestone: null }, 15: { number: 15, merged_at: 't', merge_commit_sha: 'c', milestone: null } }, ms: [M(7, '1.3.1')], tags: ['v1.3.0', 'v1.3.1', 'v1.2.9', 'v1.3.2-rc.1'], commits: commits.map(c => ({...c, commit: {...c.commit, committer: {date: '2026-11-02T20:15:00Z'}}})), assocMap: { a: [11], b: [12], c: [15], d: [13] } });
     let rs1 = rs(); rs1.release = { id: 5, tag_name: 'v1.3.1', body: 'notes', published_at: '2026-11-02T20:15:00Z', html_url: 'https://github.com/o/r/releases/tag/v1.3.1' };
     m = await runRel(org, 'v1.3.1', rs1, false);
     const asg = m.calls.filter((c) => c[0] === 'issues.update').map((c) => c[1].issue_number).sort();
@@ -102,10 +113,10 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
     const s5 = rs(); s5.ms = [M(7, '1.3.1'), M(8, '1.3.2', 'closed')];
     m = await runRel(org, 'v1.3.1', s5, false); ok(m.calls.some((c) => c[0] === 'updateMilestone' && c[1].milestone_number === 8 && c[1].state === 'open'), org + ' reopens closed next');
     const s6 = rs(); s6.diverged = ['v1.3.0', 'v1.2.9'];
-    m = await runRel(org, 'v1.3.1', s6, false); ok(m.out.failed && !m.calls.some((c) => ['issues.update', 'createMilestone', 'updateMilestone'].includes(c[0])), org + ' no ancestor fails clean');
+    m = await runRel(org, 'v1.3.1', s6, false); ok(!m.out.failed && m.calls.some(c => c[0] === 'updateMilestone'), org + ' no ancestor uses bounded initial history');
     const s7 = rs(); s7.commits = Array.from({ length: 501 }, (_, i) => ({ sha: 'x' + i, commit: { message: 'm' } }));
     m = await runRel(org, 'v1.3.1', s7, false); ok(m.out.failed && !m.calls.some((c) => ['issues.update', 'updateMilestone'].includes(c[0])), org + ' >500 commits fails clean');
-    const s8 = rs(); s8.commits = [{ sha: 'z', commit: { message: 'x (#11)' } }]; s8.assocMap = { z: [12] }; s8.prs[12].milestone = null; s8.prs[12].merge_commit_sha = 'z';
+    const s8 = rs(); s8.commits = [{ sha: 'z', commit: { message: 'x (#11)', committer: {date: '2026-11-02T20:15:00Z'} } }]; s8.assocMap = { z: [12] }; s8.prs[12].milestone = null; s8.prs[12].merge_commit_sha = 'z';
     m = await runRel(org, 'v1.3.1', s8, false); ok(JSON.stringify(m.calls.filter((c) => c[0] === 'issues.update').map((c) => c[1].issue_number)) === '[12]', org + ' uses association not message');
     const s9 = rs(); s9.prs[15].merge_commit_sha = 'outside';
     m = await runRel(org, 'v1.3.1', s9, false); ok(!m.calls.some((c) => c[0] === 'issues.update' && c[1].issue_number === 15), org + ' outside-range PR skipped');
@@ -175,8 +186,41 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
     ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' pre-release: no date stamp, no close');
     d1 = rs(); d1.release = REL('2026-11-02T20:15:00Z'); m = await runRel(org, 'v1.3.1', d1, true);
     ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' dry run: no date stamp');
+
+    let edge = rs(); edge.tags = ['v1.3.1'];
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(!m.out.failed && edge.ms[0].state === 'closed' && edge.prs[11].milestone, 'first release assigns and closes');
+    edge = rs(); edge.tags.push('v1.4.0');
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(!edge.ms.some(x => x.title === '1.3.2'), 'historical replay never creates stale successor');
+    edge = rs(); edge.release = REL('invalid');
+    try { m = await runRel(org, 'v1.3.1', edge); ok(closeCall(m)?.[1].due_on === '2026-11-02T12:00:00Z', 'invalid published date uses deterministic commit date'); }
+    catch (e) { ok(false, 'invalid published date uses deterministic commit date'); }
+    edge = rs(); edge.version = '1.3.1'; edge.previous = 'release-01.03.00';
+    m = await runRel(org, 'release-01.03.01', edge);
+    ok(!m.out.failed && edge.ms[0].state === 'closed' && !edge.ms.some(x => x.title === '1.3.2'), 'explicit legacy tag recovery normalized version without guessing successor');
+    edge = rs(); edge.version = '9.9.9';
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(m.out.failed && !m.calls.some(c => c[0] === 'updateMilestone'), 'canonical tag cannot be remapped');
+    edge = {prs: pr(null), ms: [M(1, '1.0.0'), M(2, '2.0.0')], tags: [], target: '2.0.0'};
+    m = await runPr(org, 'assign', edge);
+    ok(edge.prs[7].milestone?.number === 2, 'explicit target wins over lowest open');
+    edge = {prs: pr(M(1, '1.0.0')), ms: [], tags: [], target: '2.0.0'};
+    m = await runPr(org, 'enforce', edge);
+    ok(m.out.failed, 'enforce deliberate target mismatch');
+    edge = rs(); edge.commits = [{sha: 'x', commit: {committer: {date: 'invalid'}}}];
+    try { m = await runRel(org, 'v1.3.1', edge); ok(m.out.failed && !m.calls.some(c => ['createMilestone', 'issues.update', 'updateMilestone'].includes(c[0])), 'missing deterministic timestamp fails before writes'); } catch (e) { ok(false, 'missing deterministic timestamp fails before writes'); }
+    edge = rs(); edge.tags = ['v1.3.1']; edge.commits = Array.from({length: 501}, (_, i) => ({sha: String(i)}));
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(m.out.failed && !m.calls.some(c => ['createMilestone', 'issues.update', 'assoc'].includes(c[0])), 'first release over cap fails before mutation or associations');
+    edge = rs(); edge.previous = 'divergent'; edge.diverged = ['divergent'];
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(m.out.failed && !m.calls.some(c => c[0] === 'createMilestone'), 'explicit divergent ancestor fails closed');
+    edge = rs(); edge.tags = ['v1.3.1']; edge.paged = true; edge.commits = Array.from({length: 2000}, (_, i) => ({sha: String(i)}));
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(m.out.failed && m.calls.filter(c => c[0] === 'listCommits').length === 6 && !m.calls.some(c => c[0] === 'assoc'), 'pagination stops at first page above500 rather than scanning unbounded history');
     // non-version tag
-    m = await runRel(org, 'nightly', rs()); ok(m.calls.length === 0 && !m.out.failed, org + ' non-version tag no-op');
+    m = await runRel(org, 'nightly', rs()); ok(m.calls.length === 0 && m.out.failed, org + ' non-version tag fails explicitly');
   }
   console.log(`pass=${pass} fail=${fail}`);
   process.exit(fail ? 1 : 0);
