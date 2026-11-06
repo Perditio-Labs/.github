@@ -21,7 +21,8 @@ org var), else `enforce`.
 | Con | blocks bots and anyone without a milestone; red noise | guesses the lowest open milestone, wrong when two versions are open; hides missing discipline |
 | Fails when | no milestone, or non-version title | non-version title, or the token is read-only (fork and Dependabot PRs: attach by hand) |
 
-The default is `enforce`: attach the deliberate shipping version before merging.
+The default is `enforce`: attach the deliberate open shipping version before merging.
+Open PRs fail when their milestone is closed; historical closed PRs retain theirs.
 Assignment mode accepts `target_version` (or `PR_MILESTONE_TARGET_VERSION`), which
 selects that version rather than guessing the lowest open milestone. Enforcement
 also rejects a milestone that differs from this explicit target. Without a target,

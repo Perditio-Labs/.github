@@ -72,6 +72,9 @@ jobs:
             const target = String(process.env.TARGET_VERSION || '').trim();
             if (target && !parse(target)) { core.setFailed('pr-milestone: target_version must be a valid version'); return; }
             const ms = pr.milestone;
+            if (pr.state === 'open' && ms?.state === 'closed') {
+              core.setFailed(`PR #${number}: milestone "${ms.title}" is closed; attach the open version this work will ship in.`); return;
+            }
             if (ms && target && (!parse(ms.title) || cmp(parse(ms.title), parse(target)) !== 0)) { core.setFailed(`PR #${number}: milestone does not match target version ${target}`); return; }
             if (ms) {
               if (parse(ms.title)) { core.notice(`PR #${number}: milestone "${ms.title}" is a version. OK.`); return; }

@@ -235,6 +235,12 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
       m = await runRel(org, 'v1.3.1', edge);
       ok(m.out.failed && /open/.test(m.out.failed) && edge.ms[0].state === 'open' && !edge.ms.some(x => x.title === '1.3.2') && !m.calls.some(c => ['createMilestone', 'updateMilestone', 'issues.update', 'updateRelease'].includes(c[0])), 'live open ' + kind + ' prevents every write and successor creation');
     }
+    edge = {prs: {7: {number: 7, state: 'open', milestone: M(1, '1.3.1', 'closed')}}, ms: [], tags: []};
+    m = await runPr(org, 'enforce', edge);
+    ok(m.out.failed && /closed/.test(m.out.failed), 'open PR cannot target closed historical version');
+    edge.prs[7].state = 'closed';
+    m = await runPr(org, 'enforce', edge);
+    ok(!m.out.failed, 'historical closed PR retains closed version milestone');
     // non-version tag
     m = await runRel(org, 'nightly', rs()); ok(m.calls.length === 0 && m.out.failed, org + ' non-version tag fails explicitly');
   }

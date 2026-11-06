@@ -12,6 +12,6 @@
 
 ### Added
 
-- Explicit PR milestone target selection and enforcement.
+- Explicit PR milestone target selection and enforcement; open PRs cannot target closed versions.
 - Release publication, tag push, and manual recovery caller example.
 - Offline regression coverage for release and milestone guard behavior.
