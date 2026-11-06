@@ -156,6 +156,13 @@ jobs:
             // 3. the version milestone (find, else create)
             const all = await github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'all', per_page: 100 });
             let ms = all.find((m) => { const v = parse(m.title); return v && cmp(v, ver) === 0; });
+            if (stable && ms) {
+              // List snapshots can be stale. open_issues includes open PRs as well as issues.
+              ms = (await github.rest.issues.getMilestone({owner, repo, milestone_number: ms.number})).data;
+              if (!Number.isInteger(ms.open_issues) || ms.open_issues !== 0) {
+                core.setFailed(`release-milestone: milestone ${title} has open issues or pull requests (${ms.open_issues}); finish or deliberately retarget them, then retry. Nothing was changed.`); return;
+              }
+            }
             if (!ms) {
               log.push(`create milestone ${title}`);
               if (!dry) ms = await ensure(title);

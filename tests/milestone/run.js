@@ -21,6 +21,7 @@ function mock(state) {
     rest: {
       pulls: { get: rec('pulls.get', async (a) => { if (!state.prs[a.pull_number]) { const e = new Error('nf'); e.status = 404; throw e; } return { data: state.prs[a.pull_number] }; }) },
       issues: {
+        getMilestone: rec('getMilestone', async (a) => ({data: {...state.ms.find(m => m.number === a.milestone_number), open_issues: (state.openItems || []).filter(x => x.state === 'open' && x.milestone === a.milestone_number).length}})),
         listMilestones: async (a) => ({ data: state.ms.filter((m) => a.state === 'all' || m.state === a.state) }),
         createMilestone: rec('createMilestone', async (a) => { if (state.ms.some((m) => m.title === a.title)) { const e = new Error('exists'); e.status = 422; throw e; } const m = { number: 100 + state.ms.length, title: a.title, state: 'open', html_url: 'u/' + a.title }; state.ms.push(m); return { data: m }; }),
         updateMilestone: rec('updateMilestone', async (a) => { const m = state.ms.find((x) => x.number === a.milestone_number); for (const k of ['state', 'due_on', 'description']) if (a[k] !== undefined) m[k] = a[k]; return { data: m }; }),
@@ -228,6 +229,12 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
     edge = rs(); edge.tags = ['v1.3.1']; edge.paged = true; edge.commits = Array.from({length: 500}, (_, i) => ({sha: String(i), commit: {committer: {date: '2026-11-02T20:15:00Z'}}}));
     m = await runRel(org, 'v1.3.1', edge);
     ok(!m.out.failed && edge.ms[0].state === 'closed' && m.calls.filter(c => c[0] === 'assoc').length === 500, 'exact500commit initial release remains supported');
+    for (const kind of ['issue', 'pull_request']) {
+      edge = rs(); edge.ms[0].open_issues = 0; // list snapshot is deliberately stale
+      edge.openItems = [{number: 99, state: 'open', milestone: 7, kind}];
+      m = await runRel(org, 'v1.3.1', edge);
+      ok(m.out.failed && /open/.test(m.out.failed) && edge.ms[0].state === 'open' && !edge.ms.some(x => x.title === '1.3.2') && !m.calls.some(c => ['createMilestone', 'updateMilestone', 'issues.update', 'updateRelease'].includes(c[0])), 'live open ' + kind + ' prevents every write and successor creation');
+    }
     // non-version tag
     m = await runRel(org, 'nightly', rs()); ok(m.calls.length === 0 && m.out.failed, org + ' non-version tag fails explicitly');
   }

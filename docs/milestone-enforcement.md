@@ -89,3 +89,7 @@ while preserving the rest of the description.
 Run `node tests/milestone/run.js` (Python + PyYAML required). To exercise the same
 regressions against a base, set `MILESTONE_TEST_REF` to the base commit. The suite
 executes the actual embedded scripts against an offline API fixture.
+
+Before any release write, an existing stable milestone is fetched live. Any open
+issue or pull request blocks assignment, closure, successor creation and notes
+updates. Finish or deliberately retarget unfinished work, then retry the release.
