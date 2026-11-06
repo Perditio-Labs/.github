@@ -159,7 +159,7 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
     ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' second run does not touch the milestone: ' + m.calls.map((c) => c[0]));
     d1 = rs(); d1.release = REL('2026-11-02T20:15:00Z'); d1.ms[0].state = 'closed';
     cc = closeCall(await runRel(org, 'v1.3.1', d1, false)); ok(cc && cc[1].due_on === '2026-11-02T12:00:00Z', org + ' closed-but-undated milestone gets the date');
-    // no release object at all (tag push): falls back to the last commit date, else now; url is the tag URL
+    // Tag pushes fall back to the tag-range tip commit date; URL is the tag URL
     d1 = rs(); d1.commits = commits.map((c, i) => i === commits.length - 1 ? Object.assign({}, c, { commit: { message: c.commit.message, committer: { date: '2026-10-30T01:00:00Z' } } }) : c);
     cc = closeCall(await runRel(org, 'v1.3.1', d1, false)); ok(cc && cc[1].due_on === '2026-10-29T12:00:00Z' && /^Released 2026-10-29 18:00 PT - https:\/\/github\.com\/o\/r\/releases\/tag\/v1\.3\.1$/.test(cc[1].description), org + ' fallback to commit date');
     // wrong existing due date is corrected even when the header line is right
@@ -178,9 +178,9 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
     cc = closeCall(m); ok(cc && cc[1].due_on === '2026-11-02T12:00:00Z', org + ' payload release wins');
     d1 = rs(); d1.release = REL('2026-11-05T20:00:00Z'); m = await runRel(org, 'v1.3.1', d1, false, REL('2026-11-02T20:15:00Z', { tag_name: 'v9.9.9' }));
     cc = closeCall(m); ok(cc && cc[1].due_on === '2026-11-05T12:00:00Z', org + ' payload for another tag ignored');
-    // no timestamp anywhere: stamped with now once, and a re-run never rewrites that header
-    d1 = rs(); m = await runRel(org, 'v1.3.1', d1, false); ok(!!closeCall(m), org + ' no-timestamp first run stamps');
-    m = await runRel(org, 'v1.3.1', d1, false); ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' no-timestamp re-run is a no-op');
+    // A tag-only event uses its deterministic fixture commit timestamp once.
+    d1 = rs(); m = await runRel(org, 'v1.3.1', d1, false); ok(!!closeCall(m), org + ' tag-only first run stamps');
+    m = await runRel(org, 'v1.3.1', d1, false); ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' tag-only re-run is a no-op');
     // pre-release and dry run never stamp
     d1 = rs(); d1.ms = []; m = await runRel(org, 'v1.3.2-rc.2', d1, false);
     ok(!m.calls.some((c) => c[0] === 'updateMilestone'), org + ' pre-release: no date stamp, no close');
@@ -219,6 +219,15 @@ const M = (number, title, state = 'open') => ({ number, title, state, html_url: 
     edge = rs(); edge.tags = ['v1.3.1']; edge.paged = true; edge.commits = Array.from({length: 2000}, (_, i) => ({sha: String(i)}));
     m = await runRel(org, 'v1.3.1', edge);
     ok(m.out.failed && m.calls.filter(c => c[0] === 'listCommits').length === 6 && !m.calls.some(c => c[0] === 'assoc'), 'pagination stops at first page above500 rather than scanning unbounded history');
+    edge = rs(); edge.tags = ['v1.3.1']; edge.commits = [
+      {sha: 'tip', commit: {committer: {date: '2026-11-03T03:30:00Z'}}},
+      {sha: 'old', commit: {committer: {date: '2020-01-01T00:00:00Z'}}}
+    ];
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(closeCall(m)?.[1].due_on === '2026-11-02T12:00:00Z', 'initial descending history stamps newest tip rather than oldest commit');
+    edge = rs(); edge.tags = ['v1.3.1']; edge.paged = true; edge.commits = Array.from({length: 500}, (_, i) => ({sha: String(i), commit: {committer: {date: '2026-11-02T20:15:00Z'}}}));
+    m = await runRel(org, 'v1.3.1', edge);
+    ok(!m.out.failed && edge.ms[0].state === 'closed' && m.calls.filter(c => c[0] === 'assoc').length === 500, 'exact500commit initial release remains supported');
     // non-version tag
     m = await runRel(org, 'nightly', rs()); ok(m.calls.length === 0 && m.out.failed, org + ' non-version tag fails explicitly');
   }
