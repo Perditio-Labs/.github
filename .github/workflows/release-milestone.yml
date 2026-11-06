@@ -1,6 +1,6 @@
 # release-milestone: at release time, for version X.Y.Z (release published, or tag push vX.Y.Z):
 #   1. find every merged PR between the previous ANCESTOR version tag and this tag (commit->PR
-#      association of every commit; fails, changing nothing, above 500 commits);
+#      association of every commit; first release uses initial tag history; fails above 500 commits);
 #   2. give each one that has NO milestone the X.Y.Z milestone (created if missing; never moves
 #      an existing milestone);
 #   3. CLOSE milestone X.Y.Z (due_on = the release's Pacific date as YYYY-MM-DDT12:00:00Z; description line 1 =
@@ -9,10 +9,10 @@
 #   4. on a release event, append "Milestone: <url>" to the release notes if absent.
 # Membership: an associated PR counts only if its merge commit is inside the tag range. Runs are serialised
 # per repo; a run dropped from the queue is re-run with workflow_dispatch (dry_run=false). Reopening the next
-# patch happens only when no newer stable tag exists. Idempotent: re-running (release + tag push both fire) changes nothing the second time.
+# patch creation/reopening happens only when no newer stable tag exists. Idempotent: re-running (release + tag push both fire) changes nothing the second time.
 # Caller: see docs/release-milestone-caller.example.yml. Input dry_run=true only logs.
 # Uses only GITHUB_TOKEN (issues + pull-requests write; contents write ONLY for step 4).
-# Runs on the Perditio org runners (self-hosted, Linux, X64, perditio). ASCII only.
+# Private callers use org runners; public events default to GitHub-hosted. ASCII only.
 name: release-milestone
 on:
   workflow_call:
@@ -21,6 +21,14 @@ on:
         type: string
         default: ''
         description: 'tag to process; empty = from the release/push event'
+      version:
+        type: string
+        default: ''
+        description: 'Explicit normalized X.Y.Z for a legacy tag; canonical tags cannot be remapped'
+      previous_tag:
+        type: string
+        default: ''
+        description: 'Explicit ancestor tag for legacy release history'
       dry_run:
         type: boolean
         default: false
@@ -35,6 +43,14 @@ on:
       tag:
         type: string
         required: true
+      version:
+        type: string
+        default: ''
+        description: 'Explicit normalized X.Y.Z for a legacy tag; canonical tags cannot be remapped'
+      previous_tag:
+        type: string
+        default: ''
+        description: 'Explicit ancestor tag for legacy release history'
       dry_run:
         type: boolean
         default: true
@@ -48,12 +64,14 @@ concurrency:
 jobs:
   release-milestone:
     name: release-milestone
-    runs-on: ${{ fromJSON(inputs.runs_on || '["self-hosted","Linux","X64","perditio"]') }}
+    runs-on: ${{ fromJSON(inputs.runs_on || (github.event.repository.private == false && (vars.PERDITIO_PUBLIC_CI_RUNS_ON || '["ubuntu-latest"]')) || '["self-hosted","Linux","X64","perditio"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/github-script@v7
         env:
           IN_TAG: ${{ inputs.tag }}
+          VERSION: ${{ inputs.version }}
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
           DRY: ${{ inputs.dry_run }}
           APPEND: ${{ inputs.append_release_link }}
         with:
@@ -74,8 +92,12 @@ jobs:
             let tag = process.env.IN_TAG || '';
             if (!tag && context.payload.release) tag = context.payload.release.tag_name;
             if (!tag && String(context.ref || '').startsWith('refs/tags/')) tag = context.ref.slice(10);
-            const ver = parse(tag);
-            if (!ver) { core.notice(`release-milestone: tag "${tag}" is not a version; nothing to do.`); return; }
+            const native = parse(tag);
+            const explicit = String(process.env.VERSION || '').trim();
+            const ver = explicit ? parse(explicit) : native;
+            if (!ver || (explicit && native && cmp(native, ver) !== 0)) {
+              core.setFailed(`release-milestone: invalid or conflicting version for tag "${tag}". For legacy tags supply an explicit normalized version.`); return;
+            }
             const title = `${ver.maj}.${ver.min}.${ver.pat}${ver.pre ? '-' + ver.pre : ''}`;
             const stable = !ver.pre;
             const log = [];
@@ -91,30 +113,56 @@ jobs:
             const tags = (await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 }))
               .map((t) => ({ name: t.name, v: parse(t.name) })).filter((x) => x.v && x.name !== tag);
             const lower = tags.filter((x) => cmp(x.v, ver) < 0 && (!stable || !x.v.pre)).sort((a, b) => cmp(b.v, a.v));
+            const MAX = 500;
+            // Stop pagination after the first page exceeding the safety cap.
+            const bounded = async (method, args, select) => {
+              let count = 0;
+              return github.paginate(method, args, (r, done) => {
+                const page = select(r); count += page.length;
+                if (count > MAX) done();
+                return page;
+              });
+            };
+            const recovery = String(process.env.PREVIOUS_TAG || '').trim();
+            if (recovery === tag) { core.setFailed('release-milestone: previous_tag must differ from tag'); return; }
+            if (recovery) lower.unshift({name: recovery});
             let prev = null, commits = null;
             for (const cand of lower) {
               const r = await github.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${cand.name}...${tag}`, per_page: 1 });
+              if (recovery && cand.name === recovery && !['ahead', 'identical'].includes(r.data.status)) { core.setFailed('release-milestone: previous_tag is not an ancestor. Nothing was changed.'); return; }
               if (r.data.status === 'ahead' || r.data.status === 'identical') {
                 prev = cand.name;
-                commits = await github.paginate(github.rest.repos.compareCommitsWithBasehead, { owner, repo, basehead: `${prev}...${tag}`, per_page: 100 }, (x) => x.data.commits);
+                commits = await bounded(github.rest.repos.compareCommitsWithBasehead, { owner, repo, basehead: `${prev}...${tag}`, per_page: 100 }, (x) => x.data.commits);
                 break;
               }
             }
             if (!prev) {
-              core.setFailed(`release-milestone: no ancestor version tag found for ${tag}; first release or divergent history. Run the backfill script by hand. Nothing was changed.`);
-              return;
+              commits = await bounded(github.rest.repos.listCommits, {owner, repo, sha: tag, per_page: 100}, (r) => r.data);
             }
             const shas = new Set(commits.map((c) => c.sha));
             // 2. PRs from the commit->PR association of EVERY commit (message text is not trusted)
-            const MAX = 500;
             if (commits.length > MAX) { core.setFailed(`release-milestone: ${commits.length} commits exceed the ${MAX} lookup cap; use the backfill script. Nothing was changed.`); return; }
             const nums = new Set();
             for (const c of commits) {
               for (const p of await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, { owner, repo, commit_sha: c.sha, per_page: 100 })) nums.add(p.number);
             }
+            // Resolve a repeatable timestamp before any write. Never invent a release date from the clock.
+            let relDate = context.payload?.release?.tag_name === tag ? context.payload.release : null;
+            if (!relDate) { try { relDate = (await github.rest.repos.getReleaseByTag({owner, repo, tag})).data; } catch (e) { if (e.status !== 404) throw e; } }
+            const tip = prev ? commits[commits.length - 1] : commits[0];
+            const validDate = (v) => v && Number.isFinite(Date.parse(v));
+            const stamp = [relDate?.published_at, tip?.commit?.committer?.date, relDate?.created_at].find(validDate);
+            if (stable && !stamp) { core.setFailed('release-milestone: no valid release or tag commit timestamp. Nothing was changed.'); return; }
             // 3. the version milestone (find, else create)
             const all = await github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'all', per_page: 100 });
             let ms = all.find((m) => { const v = parse(m.title); return v && cmp(v, ver) === 0; });
+            if (stable && ms) {
+              // List snapshots can be stale. open_issues includes open PRs as well as issues.
+              ms = (await github.rest.issues.getMilestone({owner, repo, milestone_number: ms.number})).data;
+              if (!Number.isInteger(ms.open_issues) || ms.open_issues !== 0) {
+                core.setFailed(`release-milestone: milestone ${title} has open issues or pull requests (${ms.open_issues}); finish or deliberately retarget them, then retry. Nothing was changed.`); return;
+              }
+            }
             if (!ms) {
               log.push(`create milestone ${title}`);
               if (!dry) ms = await ensure(title);
@@ -133,12 +181,8 @@ jobs:
             // 5. close this version (stamped with the release date), open (or reopen) the next patch (stable only)
             if (stable) {
               if (ms) {
-                // release date: the release's published_at (event payload, else the release for this tag), else the tag's last commit, else now.
-                let rel = context.payload && context.payload.release && context.payload.release.tag_name === tag ? context.payload.release : null;
-                if (!rel) { try { rel = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data; } catch (e) { if (e.status !== 404) throw e; } }
-                const lastCommit = commits.length ? commits[commits.length - 1] : null;
-                const stamp = (rel && (rel.published_at || rel.created_at)) || (lastCommit && lastCommit.commit && lastCommit.commit.committer && lastCommit.commit.committer.date) || null;
-                const when = new Date(stamp || Date.now());   // no timestamp anywhere: now (then a re-run never rewrites an existing header)
+                const rel = relDate;
+                const when = new Date(stamp);
                 const pt = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(when).map((x) => [x.type, x.value]));
                 const day = `${pt.year}-${pt.month}-${pt.day}`;
                 const first = `Released ${day} ${pt.hour}:${pt.minute} PT - ${(rel && rel.html_url) || `https://github.com/${owner}/${repo}/releases/tag/${tag}`}`;
@@ -149,7 +193,7 @@ jobs:
                 const have = hasGen ? desc0.split(/\r?\n/)[0].trimEnd() : null;
                 const rest = hasGen ? desc0.replace(GEN, '') : desc0;
                 const dueOk = String(ms.due_on || '').slice(0, 10) === day;
-                const done = ms.state === 'closed' && hasGen && ms.due_on && (!stamp || (dueOk && have === first));
+                const done = ms.state === 'closed' && hasGen && dueOk && have === first;
                 if (!done) {
                   log.push(`close milestone ${title} (due ${day}, ${first})`);
                   if (!dry) await github.rest.issues.updateMilestone({ owner, repo, milestone_number: ms.number, state: 'closed', due_on: `${day}T12:00:00Z`, description: rest ? `${first}\n${rest}` : first });
@@ -157,8 +201,9 @@ jobs:
               }
               const nextTitle = `${ver.maj}.${ver.min}.${ver.pat + 1n}`;
               const next = all.find((m) => { const v = parse(m.title); return v && cmp(v, parse(nextTitle)) === 0; });
-              if (!next) { log.push(`create milestone ${nextTitle}`); if (!dry) await ensure(nextTitle); }
-              else if (next.state === 'closed' && !tags.some((x) => !x.v.pre && cmp(x.v, ver) > 0)) { log.push(`reopen milestone ${next.title}`); if (!dry) await github.rest.issues.updateMilestone({ owner, repo, milestone_number: next.number, state: 'open' }); }
+              const newerStable = tags.some((x) => !x.v.pre && cmp(x.v, ver) > 0);
+              if (!next && !newerStable && native) { log.push(`create milestone ${nextTitle}`); if (!dry) await ensure(nextTitle); }
+              else if (next && next.state === 'closed' && !newerStable && native) { log.push(`reopen milestone ${next.title}`); if (!dry) await github.rest.issues.updateMilestone({ owner, repo, milestone_number: next.number, state: 'open' }); }
             }
             // 6. release notes link (always re-fetch the release for THIS tag; never trust the payload body)
             if (append && ms) {

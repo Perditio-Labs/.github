@@ -2,10 +2,35 @@ name: release-milestone
 on:
   release:
     types: [published]
+  push:
+    tags: ['v*.*.*', '[0-9]*.[0-9]*.[0-9]*', '*-v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+      version:
+        type: string
+        default: ''
+        description: 'Normalized version for a legacy tag only'
+      previous_tag:
+        type: string
+        default: ''
+        description: 'Optional explicit ancestor for legacy history'
+      dry_run:
+        type: boolean
+        default: true
 permissions:
   contents: write
   pull-requests: write
   issues: write
+# Serialization belongs to the reusable workflow. Reusing its concurrency group
+# in this caller can deadlock/cancel the caller and called workflow.
 jobs:
   release-milestone:
     uses: Perditio-Labs/.github/.github/workflows/release-milestone.yml@main
+    with:
+      tag: ${{ inputs.tag || '' }}
+      version: ${{ inputs.version || '' }}
+      previous_tag: ${{ inputs.previous_tag || '' }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
