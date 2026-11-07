@@ -18,7 +18,7 @@ function mock(st) {
         listMilestones: async (a) => ({ data: st.ms.filter((m) => a.state === 'all' || m.state === a.state) }),
         createMilestone: rec('createMilestone', async (a) => { const m = { number: 50 + st.ms.length, title: a.title, state: 'open' }; st.ms.push(m); return { data: m }; }),
         updateMilestone: rec('updateMilestone', async () => { if (st.reopenFails) throw httpError(403); return { data: {} }; }),
-        update: rec('update', async (a) => { if (st.updateFails) throw httpError(500); st.pr.milestone = st.ms.find((m) => m.number === a.milestone); return {}; }),
+        update: rec('update', async (a) => { if (a.issue_number === 42) return {}; if (st.updateFails) throw httpError(500); st.pr.milestone = st.ms.find((m) => m.number === a.milestone); return {}; }),
         createLabel: rec('createLabel', async () => { if (st.labelExists) throw httpError(422); return {}; }),
         addLabels: rec('addLabels', async (a) => { if (st.addLabelsFails) throw httpError(500); st.pr.labels = (st.pr.labels || []).concat(a.labels); return {}; }),
         create: rec('create', async (a) => {
@@ -98,6 +98,10 @@ const MARK = '<!-- pr-close-guard -->';
   ok(!names(m).includes('create') && labelsAdded(m)[0] === 'status/redo', 'issue exists, label missing: no duplicate issue, label added');
   m = await run(base({ pr: { milestone: { number: 1, title: '1.0.0' } }, issues: [{ number: 43, user: { type: 'User', login: 'mallory' }, author_association: 'NONE', body: '<!-- redo-of-pr-7 -->' }] }));
   ok(names(m).includes('create'), 'untrusted issue with the marker is ignored');
+
+  m = await run(base({ pr: { milestone: { number: 2, title: '2.0.0' } }, ms: [{ number: 1, title: '1.0.0', state: 'open' }, { number: 2, title: '2.0.0', state: 'open' }],
+    issues: [{ number: 42, user: { type: 'Bot' }, milestone: { number: 1 }, body: 'x\r\n<!-- redo-of-pr-7 -->\r\n' }] }));
+  ok(!names(m).includes('create') && m.calls.some((c) => c[0] === 'update' && c[1].issue_number === 42 && c[1].milestone === 2), 'R2: CRLF marker in another milestone: issue moved, no duplicate');
 
   // R1-3: milestone ordering matches pr-milestone
   m = await run(base({ ms: [{ number: 10, title: '1.0.0-rc.10', state: 'open' }, { number: 2, title: '1.0.0-rc.2', state: 'open' }] }));

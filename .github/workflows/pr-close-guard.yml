@@ -122,9 +122,10 @@ jobs:
               // Reconcile, never trust the label alone: find the redo issue by its marker (any state), create it only if absent.
               const marker = `<!-- redo-of-pr-${number} -->`;
               const trusted = (i) => i.user && (i.user.type === 'Bot' || ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(i.author_association));
-              const inMs = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', milestone: String(ms.number), per_page: 100 });
+              const inMs = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
               redo = inMs.find((i) => !i.pull_request && trusted(i) && String(i.body || '').split(/\r?\n/).includes(marker)) || null;
               if (redo) {
+                if (!redo.milestone || redo.milestone.number !== ms.number) await github.rest.issues.update({ owner, repo, issue_number: redo.number, milestone: ms.number });
                 said.push(`redo issue #${redo.number} already exists`);
               } else {
                 const keep = names.filter((n) => /^(type|area)\//.test(n) || /^P[1-6]$/.test(n));
