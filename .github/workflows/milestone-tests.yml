@@ -24,3 +24,4 @@ jobs:
       - run: python -m pip install PyYAML==6.0.2
       - run: node tests/milestone/run.js
       - run: python -B tests/milestone/test_contract.py
+      - run: node tests/close_guard/run.js

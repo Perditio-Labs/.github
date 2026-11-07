@@ -1,0 +1,165 @@
+# pr-close-guard: a PR closed WITHOUT merging must never end with no milestone and no status label.
+# Kim 2026-11-06 (audit: 190 closed-unmerged PRs had no status label). Server-side and
+# model agnostic: it runs in GitHub Actions, whoever (Claude, Codex, a person, a bot) closed the PR.
+#
+# On a closed, NOT merged PR it (every run RECONCILES; nothing is skipped because an earlier run happened):
+#   1. assigns the lowest OPEN version milestone when the PR has none (if none is open: creates the next
+#      patch of the newest version tag; same semver ordering as pr-milestone assign mode);
+#   2. status label, unless the PR already carries status/superseded or status/dropped:
+#        - bot author (type Bot, login ends [bot], exactly dependabot or renovate) or a SAME-REPO branch
+#          promotion (dev:staging, staging:main, dev:main, release:main as head:base) -> status/dropped;
+#        - otherwise (a person or an agent account) -> ONE redo issue in the milestone (found by its
+#          <!-- redo-of-pr-N --> marker in any state, created only if absent), THEN the label status/redo,
+#          so a failed run leaves the PR unlabelled and the next run repeats the work;
+#   3. ONE comment by the Actions bot (marker <!-- pr-close-guard -->), updated in place on later runs.
+# It never closes, reopens, merges, deletes a branch or checks out PR code. It writes labels, a milestone,
+# one comment and at most one issue.
+# Limit: a closed-event run that fails (API or runner outage) leaves the PR as it was; the nightly
+# repo_standards_audit counts closed-unmerged PRs with no status label, which is the retry signal.
+#
+# Caller (per repo, see docs/pr-close-guard-caller.example.yml). The caller MUST use pull_request_target:
+# closed events of bot PRs (Dependabot, Renovate) otherwise get a read-only token and cannot be labelled.
+# pull_request_target is safe here because nothing from the PR is checked out or executed.
+# Runs on the Perditio org runners (public repos follow PERDITIO_PUBLIC_CI_RUNS_ON like pr-milestone); no runner override input. ASCII only.
+name: pr-close-guard
+on:
+  workflow_call:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+concurrency:
+  group: pr-close-guard-${{ github.workflow_ref }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+jobs:
+  pr-close-guard:
+    name: pr-close-guard
+    if: github.event.pull_request.merged == false
+    runs-on: ${{ fromJSON((github.event.repository.private == false && (vars.PERDITIO_PUBLIC_CI_RUNS_ON || '["ubuntu-latest"]')) || '["self-hosted","Linux","X64","perditio"]') }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v7
+        id: guard
+        name: Milestone, status label and redo issue for an unmerged close
+        with:
+          script: |
+            const MARK = '<!-- pr-close-guard -->';
+            const LABELS = {
+              'status/dropped': ['c5def5', 'PR closed unmerged: dropped (bot or chore PR, work not wanted)'],
+              'status/redo': ['fbca04', 'PR closed unmerged but the work is still wanted: redo issue in the next milestone'],
+            };
+            const SEMVER = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+            const parse = (t) => { const m = SEMVER.exec(String(t || '').trim()); return m ? { maj: BigInt(m[1]), min: BigInt(m[2]), pat: BigInt(m[3]), pre: m[4] || null } : null; };
+            const cmpId = (a, b) => { const an = /^\d+$/.test(a), bn = /^\d+$/.test(b); if (an && bn) { const x = BigInt(a), y = BigInt(b); return x < y ? -1 : x > y ? 1 : 0; } if (an) return -1; if (bn) return 1; return a < b ? -1 : a > b ? 1 : 0; };
+            const cmp = (a, b) => {
+              for (const k of ['maj', 'min', 'pat']) if (a[k] !== b[k]) return a[k] < b[k] ? -1 : 1;
+              if (a.pre === b.pre) return 0; if (!a.pre) return 1; if (!b.pre) return -1;
+              const x = a.pre.split('.'), y = b.pre.split('.');
+              for (let i = 0; i < Math.max(x.length, y.length); i++) { if (x[i] === undefined) return -1; if (y[i] === undefined) return 1; const c = cmpId(x[i], y[i]); if (c) return c; }
+              return 0;
+            };
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request && context.payload.pull_request.number;
+            if (!number) { core.setFailed('pr-close-guard: no pull_request in the event payload'); return; }
+            // Re-read: the event payload can be stale.
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            if (pr.merged || pr.merged_at) { core.notice(`PR #${number} is merged: nothing to do.`); return; }
+            if (pr.state !== 'closed') { core.notice(`PR #${number} is open again: nothing to do.`); return; }
+            // The marker comment only says WHERE our one comment lives (updated in place); it never skips the
+            // reconciliation below, so a reopen + reclose with metadata removed is repaired. Only a comment by the
+            // Actions bot counts (a person cannot forge it to suppress the guard).
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number, per_page: 100 });
+            const previous = comments.find((c) => c.user && c.user.type === 'Bot' && c.user.login === 'github-actions[bot]' && String(c.body || '').startsWith(MARK + '\n'));
+
+            // ---- 1. milestone
+            let ms = pr.milestone;
+            const said = [];
+            let redo = null;
+            if (!ms) {
+              const open = (await github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'open', per_page: 100 }))
+                .map((m) => ({ m, v: parse(m.title) })).filter((x) => x.v).sort((a, b) => cmp(a.v, b.v));
+              let chosen = open.length ? open[0].m : null;
+              if (!chosen) {
+                const tags = (await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 }))
+                  .map((t) => ({ t, v: parse(t.name) })).filter((x) => x.v).sort((a, b) => cmp(b.v, a.v));
+                let next = '0.0.1';
+                if (tags.length) { const v = tags[0].v; next = v.pre ? `${v.maj}.${v.min}.${v.pat}` : `${v.maj}.${v.min}.${v.pat + 1n}`; }
+                try {
+                  chosen = (await github.rest.issues.createMilestone({ owner, repo, title: next })).data;
+                } catch (e) {
+                  if (e.status !== 422) throw e;
+                  const all = await github.paginate(github.rest.issues.listMilestones, { owner, repo, state: 'all', per_page: 100 });
+                  chosen = all.find((m) => m.title === next);
+                  if (!chosen) throw e;
+                  if (chosen.state === 'closed') chosen = (await github.rest.issues.updateMilestone({ owner, repo, milestone_number: chosen.number, state: 'open' })).data;
+                }
+              }
+              await github.rest.issues.update({ owner, repo, issue_number: number, milestone: chosen.number });
+              ms = chosen;
+              said.push(`milestone "${chosen.title}" assigned`);
+            }
+
+            // ---- 2. status label
+            const names = (pr.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
+            const login = String((pr.user || {}).login || '');
+            const isBot = (pr.user || {}).type === 'Bot' || /\[bot\]$/i.test(login) || /^(dependabot|renovate)$/i.test(login);
+            const sameRepo = !!(pr.head && pr.head.repo && pr.base && pr.base.repo && pr.head.repo.full_name === pr.base.repo.full_name);
+            const promotion = sameRepo && new Set(['dev:staging', 'staging:main', 'dev:main', 'release:main']).has(`${pr.head.ref}:${pr.base.ref}`);
+            const superseded = names.includes('status/superseded');
+            const dropped = names.includes('status/dropped');
+            const hasRedo = names.includes('status/redo');
+            const wantRedo = !superseded && !dropped && (hasRedo || !(isBot || promotion));
+            if (superseded || dropped) {
+              said.push(`status label already present (${superseded ? 'status/superseded' : 'status/dropped'})`);
+            } else if (!hasRedo && (isBot || promotion)) {
+              const [color, description] = LABELS['status/dropped'];
+              try { await github.rest.issues.createLabel({ owner, repo, name: 'status/dropped', color, description }); }
+              catch (e) { if (e.status !== 422) throw e; }
+              await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: ['status/dropped'] });
+              said.push(`label status/dropped added (${isBot ? 'bot author' : 'same-repo branch promotion'})`);
+            }
+            if (wantRedo) {
+              // Reconcile, never trust the label alone: find the redo issue by its marker (any state), create it only if absent.
+              const marker = `<!-- redo-of-pr-${number} -->`;
+              const trusted = (i) => i.user && (i.user.type === 'Bot' || ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(i.author_association));
+              const inMs = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'all', per_page: 100 });
+              redo = inMs.find((i) => !i.pull_request && trusted(i) && String(i.body || '').split(/\r?\n/).includes(marker)) || null;
+              if (redo) {
+                if (!redo.milestone || redo.milestone.number !== ms.number) await github.rest.issues.update({ owner, repo, issue_number: redo.number, milestone: ms.number });
+                said.push(`redo issue #${redo.number} already exists`);
+              } else {
+                const keep = names.filter((n) => /^(type|area)\//.test(n) || /^P[1-6]$/.test(n));
+                if (!keep.some((n) => n.startsWith('type/'))) keep.push('type/chore');
+                if (!keep.some((n) => n.startsWith('area/'))) keep.push('area/product');
+                if (!keep.some((n) => /^P[1-6]$/.test(n))) keep.push('P4');
+                const params = {
+                  owner, repo,
+                  title: `redo: ${pr.title}`.slice(0, 200),
+                  body: `PR #${number} (${pr.html_url}) was closed without merging and the work is still wanted. Redo it in milestone ${ms.title}.\n\nOriginal head: \`${(pr.head || {}).ref}\` (archive tags: \`archive/*/${String((pr.head || {}).ref).replace(/\//g, '-')}\`).\n\nEstimate (hrs): 1\nActual (hrs): \n\n${marker}`,
+                  labels: keep, milestone: ms.number,
+                };
+                const who = (pr.assignees || []).map((a) => a.login);
+                if (who.length) params.assignees = who;
+                try { redo = (await github.rest.issues.create(params)).data; }
+                catch (e) {
+                  if (e.status !== 422 || !params.assignees) throw e;
+                  delete params.assignees;   // a non-collaborator assignee is refused: retry unassigned
+                  redo = (await github.rest.issues.create(params)).data;
+                }
+                said.push(`redo issue #${redo.number} opened in ${ms.title}`);
+              }
+              // The label goes on LAST: a failure above leaves the PR unlabelled so the next run repeats the reconciliation.
+              if (!hasRedo) {
+                const [color, description] = LABELS['status/redo'];
+                try { await github.rest.issues.createLabel({ owner, repo, name: 'status/redo', color, description }); }
+                catch (e) { if (e.status !== 422) throw e; }
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: ['status/redo'] });
+                said.push('label status/redo added');
+              }
+            }
+
+            // ---- 3. comment
+            const text = `${MARK}\npr-close-guard: this PR was closed without merging. ${said.join('; ')}.`;
+            if (previous) await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body: text });
+            else await github.rest.issues.createComment({ owner, repo, issue_number: number, body: text });
+            core.notice(`PR #${number}: ${said.join('; ')}`);

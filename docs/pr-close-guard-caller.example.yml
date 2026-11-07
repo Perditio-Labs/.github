@@ -1,0 +1,16 @@
+# Calls the org reusable workflow in Perditio-Labs/.github (per-repo caller). pull_request_target on purpose:
+# closed events of bot PRs get a read-only token under pull_request. Nothing from the PR is checked out or run.
+name: pr-close-guard
+on:
+  pull_request_target:
+    types: [closed]
+permissions:
+  contents: read
+jobs:
+  pr-close-guard:
+    if: github.event.pull_request.merged == false
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: Perditio-Labs/.github/.github/workflows/pr-close-guard.yml@main # pin to a merge commit once rolled
